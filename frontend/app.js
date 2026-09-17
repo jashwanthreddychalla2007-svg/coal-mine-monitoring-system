@@ -6,7 +6,15 @@ let gisMap = null;
 let mapMarkers = [];
 let chartInstance = null;
 
-// Initialize on DOM Ready
+const sectionTitles = {
+  'dashboard': 'Executive Overview',
+  'gis': 'GIS Spatial Map',
+  'statutory': 'Statutory Compliance Register',
+  'inspection': 'Field Inspection & Audit',
+  'ai-analytics': 'AI Risk & Anomaly Assessment',
+  'contractors': 'Contractor Compliance'
+};
+
 document.addEventListener("DOMContentLoaded", () => {
   initDashboard();
 });
@@ -19,20 +27,25 @@ async function initDashboard() {
   await loadContractorsData();
 }
 
-// Navigation Tabs
+// Tab Switching
 function switchTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
 
   const targetTab = document.getElementById(`tab-${tabId}`);
   if (targetTab) targetTab.classList.add('active');
 
-  const clickedNav = Array.from(document.querySelectorAll('.nav-item')).find(el => 
+  const clickedNav = Array.from(document.querySelectorAll('.nav-link')).find(el => 
     el.getAttribute('onclick')?.includes(tabId)
   );
   if (clickedNav) clickedNav.classList.add('active');
 
-  // If GIS map tab is activated, invalidate Leaflet map size to prevent rendering glitch
+  const titleEl = document.getElementById('current-section-name');
+  if (titleEl && sectionTitles[tabId]) {
+    titleEl.textContent = sectionTitles[tabId];
+  }
+
+  // If GIS tab is selected, refresh map dimensions
   if (tabId === 'gis') {
     setTimeout(() => {
       if (!gisMap) {
@@ -57,11 +70,11 @@ async function loadOverview() {
 
     renderSubsidiaryChart(data.subsidiary_breakdown);
   } catch (err) {
-    console.error("Failed to load overview:", err);
+    console.error("Failed to load overview data:", err);
   }
 }
 
-// Render Chart.js
+// Render Chart
 function renderSubsidiaryChart(subsidiaries) {
   const ctx = document.getElementById('subsidiaryChart').getContext('2d');
   const labels = Object.keys(subsidiaries);
@@ -76,10 +89,10 @@ function renderSubsidiaryChart(subsidiaries) {
       datasets: [{
         label: 'Statutory Compliance Score (%)',
         data: scores,
-        backgroundColor: scores.map(s => s >= 90 ? 'rgba(16, 185, 129, 0.7)' : (s >= 80 ? 'rgba(245, 158, 11, 0.7)' : 'rgba(239, 68, 68, 0.7)')),
-        borderColor: scores.map(s => s >= 90 ? '#10b981' : (s >= 80 ? '#f59e0b' : '#ef4444')),
+        backgroundColor: scores.map(s => s >= 90 ? '#15803d' : (s >= 80 ? '#d97706' : '#dc2626')),
+        borderColor: scores.map(s => s >= 90 ? '#166534' : (s >= 80 ? '#b45309' : '#b91c1c')),
         borderWidth: 1,
-        borderRadius: 6
+        borderRadius: 2
       }]
     },
     options: {
@@ -91,19 +104,19 @@ function renderSubsidiaryChart(subsidiaries) {
         y: {
           min: 60,
           max: 100,
-          grid: { color: 'rgba(255, 255, 255, 0.05)' },
-          ticks: { color: '#9ca3af' }
+          grid: { color: '#e5e7eb' },
+          ticks: { color: '#4b5563', font: { size: 11 } }
         },
         x: {
           grid: { display: false },
-          ticks: { color: '#9ca3af' }
+          ticks: { color: '#4b5563', font: { size: 11 } }
         }
       }
     }
   });
 }
 
-// 2. Mines Table & Mine Dropdown
+// 2. Mines Table & Form Dropdown
 async function loadMinesData() {
   try {
     const sub = document.getElementById('subsidiary-filter').value;
@@ -119,30 +132,29 @@ async function loadMinesData() {
 
     allMines.forEach(mine => {
       const risk = mine.ai_risk_assessment;
-      const riskBadge = `<span class="badge" style="background:${risk.color_code}22; color:${risk.color_code}; border:1px solid ${risk.color_code}44;">
-        ${risk.risk_status} (${risk.risk_score})
-      </span>`;
+      let badgeClass = 'badge-success';
+      if (risk.risk_status.includes('HAZARD')) badgeClass = 'badge-danger';
+      else if (risk.risk_status.includes('RISK')) badgeClass = 'badge-warning';
 
-      // Telemetry badge
-      let gasBadge = '';
+      let telemetry = '';
       if (mine.type === 'Underground') {
-        gasBadge = `CH4: <b>${mine.gas_status.ch4_pct}%</b> | CO: <b>${mine.gas_status.co_ppm}ppm</b>`;
+        telemetry = `CH4: ${mine.gas_status.ch4_pct}% | CO: ${mine.gas_status.co_ppm} ppm`;
       } else {
-        gasBadge = `PM10: <b>${mine.gas_status.pm10_ugm3} µg/m³</b>`;
+        telemetry = `PM10: ${mine.gas_status.pm10_ugm3} µg/m³`;
       }
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="font-family: var(--font-mono); color: var(--accent);">${mine.id}</td>
-        <td><b>${mine.name}</b><br><small style="color:var(--text-muted);">${mine.area}</small></td>
-        <td><span class="badge badge-info">${mine.subsidiary}</span></td>
+        <td style="font-family: var(--font-mono); font-weight: 500;">${mine.id}</td>
+        <td><strong>${mine.name}</strong><br><span style="font-size:11.5px; color:var(--text-light);">${mine.area}</span></td>
+        <td><span class="badge badge-neutral">${mine.subsidiary}</span></td>
         <td>${mine.type}</td>
-        <td>${mine.current_production_tonnes.toLocaleString()} / ${mine.daily_target_tonnes.toLocaleString()} MT</td>
-        <td>${gasBadge}</td>
-        <td>${riskBadge}</td>
-        <td>${mine.active_violations > 0 ? `<span class="badge badge-danger">${mine.active_violations} Violation(s)</span>` : '<span class="badge badge-success">Clean</span>'}</td>
+        <td>${mine.current_production_tonnes.toLocaleString()} MT</td>
+        <td style="font-size: 12px;">${telemetry}</td>
+        <td><span class="badge ${badgeClass}">${risk.risk_score} - ${risk.risk_status}</span></td>
+        <td>${mine.active_violations > 0 ? `<span class="badge badge-danger">${mine.active_violations} Violation(s)</span>` : '<span class="badge badge-success">Nil</span>'}</td>
         <td>
-          <button class="btn btn-outline" style="padding: 4px 10px; font-size: 11px;" onclick="viewMineDetails('${mine.id}')">Inspect</button>
+          <button class="btn btn-secondary btn-sm" onclick="viewMineDetails('${mine.id}')">View Details</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -160,36 +172,38 @@ async function loadMinesData() {
   }
 }
 
-// 3. Leaflet GIS Map
+// 3. Leaflet GIS Map (Clean Government OpenStreetMap Styling)
 function initGISMap() {
   const mapElement = document.getElementById('gis-map');
   if (!mapElement) return;
 
-  // Center on Central/Eastern India Coalfields (Jharkhand/Chhattisgarh)
   gisMap = L.map('gis-map').setView([23.5, 84.5], 6);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors | KhananRakshak GIS'
+    attribution: '&copy; OpenStreetMap contributors | CIL GIS Portal'
   }).addTo(gisMap);
 
-  // Plot Mines
   allMines.forEach(mine => {
     const risk = mine.ai_risk_assessment;
+    let markerColor = '#15803d'; // green
+    if (risk.risk_status.includes('HAZARD')) markerColor = '#dc2626'; // red
+    else if (risk.risk_status.includes('RISK')) markerColor = '#d97706'; // amber
+
     const marker = L.circleMarker([mine.lat, mine.lng], {
-      radius: 12,
-      fillColor: risk.color_code,
-      color: '#fff',
+      radius: 9,
+      fillColor: markerColor,
+      color: '#ffffff',
       weight: 2,
       opacity: 1,
-      fillOpacity: 0.85
+      fillOpacity: 0.9
     }).addTo(gisMap);
 
     const popupContent = `
-      <div style="font-family: sans-serif; color: #111;">
-        <h4 style="margin:0 0 4px 0;">${mine.name}</h4>
-        <div style="font-size: 12px; margin-bottom: 6px;"><b>Subsidiary:</b> ${mine.subsidiary} | <b>Type:</b> ${mine.type}</div>
-        <div style="font-size: 12px; margin-bottom: 6px;"><b>AI Risk Score:</b> <span style="color:${risk.color_code}; font-weight:bold;">${risk.risk_score} - ${risk.risk_status}</span></div>
-        <div style="font-size: 11px; background:#f3f4f6; padding:6px; border-radius:4px;">
+      <div style="font-family: var(--font-sans); color: #1f2937; padding: 2px;">
+        <div style="font-weight: 700; font-size: 13px; margin-bottom: 4px;">${mine.name}</div>
+        <div style="font-size: 11px; margin-bottom: 4px;"><strong>Subsidiary:</strong> ${mine.subsidiary} | <strong>Type:</strong> ${mine.type}</div>
+        <div style="font-size: 11px; margin-bottom: 4px;"><strong>Risk Evaluation:</strong> ${risk.risk_score} (${risk.risk_status})</div>
+        <div style="font-size: 11px; background: #f3f4f6; padding: 4px 6px; border-radius: 3px;">
           ${mine.type === 'Underground' ? `Methane: ${mine.gas_status.ch4_pct}% | CO: ${mine.gas_status.co_ppm} ppm` : `Dust PM10: ${mine.gas_status.pm10_ugm3} µg/m³`}
         </div>
       </div>
@@ -217,18 +231,18 @@ async function loadCompliancesData(filterStatus = null) {
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="font-family: var(--font-mono); color: var(--accent);">${c.id}</td>
-        <td><b>${c.mine_name}</b></td>
-        <td><span class="badge badge-info">${c.category}</span></td>
+        <td style="font-family: var(--font-mono); font-weight: 500;">${c.id}</td>
+        <td><strong>${c.mine_name}</strong></td>
+        <td><span class="badge badge-neutral">${c.category}</span></td>
         <td>${c.regulation}</td>
         <td>${c.frequency}</td>
-        <td style="color: ${c.status === 'OVERDUE' ? 'var(--danger)' : 'inherit'}; font-weight: 600;">${c.due_date}</td>
+        <td style="font-weight: 600; color: ${c.status === 'OVERDUE' ? '#dc2626' : 'inherit'};">${c.due_date}</td>
         <td><span class="badge ${c.criticality.includes('Class A') ? 'badge-danger' : 'badge-warning'}">${c.criticality}</span></td>
         <td><span class="badge ${badgeClass}">${c.status}</span></td>
         <td>
           ${c.status !== 'COMPLIED' ? 
-            `<button class="btn btn-outline" style="padding: 3px 8px; font-size: 11px; color: var(--success);" onclick="markComplied('${c.id}')">Verify</button>` : 
-            `<span style="color: var(--success); font-size: 12px;">Verified ✓</span>`
+            `<button class="btn btn-secondary btn-sm" onclick="markComplied('${c.id}')">Verify</button>` : 
+            `<span style="color: #15803d; font-size: 12px; font-weight: 600;">Verified</span>`
           }
         </td>
       `;
@@ -248,17 +262,17 @@ async function markComplied(complianceId) {
     await fetch(`/api/compliances/${complianceId}/update-status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'COMPLIED', notes: 'Verified via statutory inspection log' })
+      body: JSON.stringify({ status: 'COMPLIED', notes: 'Verified and certified by DGMS inspection' })
     });
     loadCompliancesData();
     loadOverview();
-    alert(`Statutory Mandate ${complianceId} status updated to COMPLIED.`);
+    alert(`Statutory Mandate [${complianceId}] successfully updated to COMPLIED.`);
   } catch (err) {
     alert("Error updating compliance status.");
   }
 }
 
-// 5. Field Inspections
+// 5. Field Inspections & Alerts
 async function loadInspectionsData() {
   try {
     const res = await fetch('/api/inspections');
@@ -272,34 +286,38 @@ async function loadInspectionsData() {
 
     allInspections.forEach(insp => {
       const item = document.createElement('div');
-      item.style.cssText = "background: #0d1424; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px;";
+      item.style.cssText = "background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius); padding: 12px;";
       item.innerHTML = `
-        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-          <b>${insp.mine_name}</b>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong style="font-size: 13.5px; color: var(--primary-navy);">${insp.mine_name}</strong>
           <span class="badge ${insp.violation_class === 'Class A' ? 'badge-danger' : 'badge-warning'}">${insp.violation_class}</span>
         </div>
-        <div style="font-size: 13px; color: #fff; margin-bottom: 6px;">${insp.findings}</div>
-        <div style="font-size: 11px; color: var(--text-dim);">
-          📍 [${insp.lat}, ${insp.lng}] | Inspector: ${insp.inspector_name} (${insp.inspector_role}) | ${insp.date}
+        <div style="font-size: 12.5px; color: var(--text-main); margin-bottom: 6px;">${insp.findings}</div>
+        <div style="font-size: 11px; color: var(--text-light); margin-bottom: 6px;">
+          Coordinates: [${insp.lat}, ${insp.lng}] | Inspector: ${insp.inspector_name} (${insp.inspector_role}) | Logged: ${insp.date}
         </div>
-        <div style="font-size: 12px; color: var(--primary); margin-top: 6px;">
-          🛠️ <b>Action:</b> ${insp.corrective_action_required}
+        <div style="font-size: 12px; color: var(--primary-navy); font-weight: 500;">
+          <strong>Remedial Action:</strong> ${insp.corrective_action_required}
         </div>
       `;
       list.appendChild(item);
 
-      // Add to escalation alert widget on dashboard if Class A or Escalated
+      // Add to escalation panel if Class A or Escalated
       if (insp.status === 'ESCALATED_TO_GM') {
         const alertCard = document.createElement('div');
-        alertCard.style.cssText = "background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 12px; border-radius: 4px; font-size: 12px;";
+        alertCard.className = 'gov-alert gov-alert-danger';
         alertCard.innerHTML = `
-          <div style="font-weight: bold; color: #ef4444; margin-bottom: 2px;">⚠️ ESCALATION: ${insp.mine_name}</div>
-          <div style="color: var(--text-main); margin-bottom: 4px;">${insp.findings}</div>
-          <div style="color: var(--text-dim);">Auto-escalated to General Manager (SLA Expired).</div>
+          <div style="font-weight: 700; margin-bottom: 2px;">Notice: ${insp.mine_name}</div>
+          <div style="margin-bottom: 4px;">${insp.findings}</div>
+          <div style="font-size: 11.5px; color: #7f1d1d;">Auto-escalated to General Manager due to SLA breach.</div>
         `;
         alertContainer.appendChild(alertCard);
       }
     });
+
+    if (alertContainer.children.length === 0) {
+      alertContainer.innerHTML = `<div class="gov-alert gov-alert-info">No statutory escalations currently pending.</div>`;
+    }
   } catch (err) {
     console.error("Failed to load inspections:", err);
   }
@@ -339,7 +357,7 @@ async function submitInspection(e) {
     });
 
     if (res.ok) {
-      alert("✅ Geo-tagged inspection logged and real-time risk score updated!");
+      alert("Inspection report submitted and logged to statutory audit trail.");
       document.getElementById('insp-findings').value = '';
       document.getElementById('insp-action').value = '';
       await loadInspectionsData();
@@ -351,7 +369,7 @@ async function submitInspection(e) {
   }
 }
 
-// 6. AI Analytics & Diagnostics View
+// 6. AI Risk Diagnostics
 function renderAIAnalyticsCards(mines) {
   const container = document.getElementById('ai-risk-cards');
   container.innerHTML = '';
@@ -360,40 +378,42 @@ function renderAIAnalyticsCards(mines) {
     const ai = mine.ai_risk_assessment;
     const anomaly = mine.production_anomaly;
 
+    let badgeClass = 'badge-success';
+    if (ai.risk_status.includes('HAZARD')) badgeClass = 'badge-danger';
+    else if (ai.risk_status.includes('RISK')) badgeClass = 'badge-warning';
+
     const card = document.createElement('div');
-    card.className = 'card';
+    card.style.cssText = "background:#ffffff; border:1px solid var(--border-color); border-radius:var(--radius); padding:16px;";
     card.innerHTML = `
-      <div class="card-header">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; border-bottom:1px solid var(--border-subtle); padding-bottom:8px;">
         <div>
-          <h4 style="color:#fff; font-size:15px;">${mine.name}</h4>
-          <span style="font-size:12px; color:var(--text-muted);">${mine.subsidiary} • ${mine.type}</span>
+          <div style="font-weight:700; color:var(--primary-navy); font-size:14px;">${mine.name}</div>
+          <div style="font-size:12px; color:var(--text-light);">${mine.subsidiary} &bull; ${mine.type} Mine</div>
         </div>
-        <span class="badge" style="background:${ai.color_code}22; color:${ai.color_code}; border:1px solid ${ai.color_code}55; font-size:13px;">
-          MRI: ${ai.risk_score} / 100
-        </span>
+        <span class="badge ${badgeClass}">Score: ${ai.risk_score} / 100</span>
       </div>
 
-      <div style="font-size: 13px; margin-bottom: 12px;">
-        <b>Predicted Incident Probability:</b> <span style="color:${ai.color_code}; font-weight:bold;">${ai.predicted_incident_probability_pct}%</span>
+      <div style="font-size:12.5px; margin-bottom:10px;">
+        <strong>Statistical Hazard Probability:</strong> ${ai.predicted_incident_probability_pct}%
       </div>
 
-      <div style="background: rgba(255,255,255,0.02); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 12px;">
-        <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">AI Identified Risk Vectors</div>
-        <ul style="padding-left: 18px; font-size: 12px; color: #e5e7eb;">
-          ${ai.primary_factors.map(f => `<li style="margin-bottom: 4px;">${f}</li>`).join('')}
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11.5px; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Contributing Risk Factors</div>
+        <ul style="padding-left:18px; font-size:12px; color:var(--text-main);">
+          ${ai.primary_factors.map(f => `<li style="margin-bottom:3px;">${f}</li>`).join('')}
         </ul>
       </div>
 
-      <div class="ai-recommendation-box">
-        <h4>⚡ AI Prescribed Interventions</h4>
-        <ul>
+      <div class="gov-alert gov-alert-warning" style="margin-bottom:8px; font-size:12px;">
+        <strong style="display:block; margin-bottom:3px;">Prescribed Compliance Action:</strong>
+        <ul style="padding-left:16px; margin:0;">
           ${ai.ai_corrective_recommendations.map(r => `<li>${r}</li>`).join('')}
         </ul>
       </div>
 
       ${anomaly.is_anomaly ? `
-        <div style="margin-top: 12px; background: rgba(239, 68, 68, 0.1); border: 1px dashed #ef4444; border-radius: 6px; padding: 10px; font-size: 12px; color: #fca5a5;">
-          <b>Production / EC Anomaly:</b> ${anomaly.description}
+        <div class="gov-alert gov-alert-danger" style="margin:0; font-size:11.5px;">
+          <strong>Operational / EC Anomaly:</strong> ${anomaly.description}
         </div>
       ` : ''}
     `;
@@ -406,36 +426,36 @@ async function loadContractorsData() {
   const tbody = document.getElementById('contractors-table-body');
   tbody.innerHTML = `
     <tr>
-      <td style="font-family: var(--font-mono); color: var(--accent);">CONT-301</td>
-      <td><b>BEEPC Mining Services Ltd.</b></td>
+      <td style="font-family: var(--font-mono); font-weight: 500;">CONT-301</td>
+      <td><strong>BEEPC Mining Services Ltd.</strong></td>
       <td>Jharia Opencast Block IV</td>
-      <td>340 Drivers / Rig Operators</td>
+      <td>340 Personnel</td>
       <td><span class="badge badge-success">91.0%</span></td>
-      <td>98.5% Complied</td>
-      <td style="color:var(--success);">2027-03-31 (Active)</td>
-      <td><span class="badge badge-success">Vetted</span></td>
+      <td>98.5% Certified</td>
+      <td>2027-03-31</td>
+      <td><span class="badge badge-success">Approved</span></td>
       <td><span class="badge badge-success">Low Risk</span></td>
     </tr>
     <tr>
-      <td style="font-family: var(--font-mono); color: var(--accent);">CONT-302</td>
-      <td><b>Vindhya Earthmovers & Haulage</b></td>
+      <td style="font-family: var(--font-mono); font-weight: 500;">CONT-302</td>
+      <td><strong>Vindhya Earthmovers & Haulage</strong></td>
       <td>Rajmahal OCP (Lalmatia)</td>
-      <td>210 Dumper Operators</td>
+      <td>210 Personnel</td>
       <td><span class="badge badge-danger">72.4%</span></td>
-      <td>81.0% Complied (19 Uncertified)</td>
-      <td style="color:var(--danger); font-weight:bold;">2026-10-10 (Expiring in 23 days)</td>
-      <td><span class="badge badge-warning">Audit Pending</span></td>
+      <td>81.0% Certified (19 Pending)</td>
+      <td style="color:#dc2626; font-weight:600;">2026-10-10 (Expiring)</td>
+      <td><span class="badge badge-warning">Audit Scheduled</span></td>
       <td><span class="badge badge-danger">High Risk</span></td>
     </tr>
     <tr>
-      <td style="font-family: var(--font-mono); color: var(--accent);">CONT-303</td>
-      <td><b>Pragati Heavy Infra Pvt Ltd</b></td>
+      <td style="font-family: var(--font-mono); font-weight: 500;">CONT-303</td>
+      <td><strong>Pragati Heavy Infra Pvt Ltd</strong></td>
       <td>Gevra Mega Opencast Project</td>
-      <td>650 Heavy Earth Moving Machinery Crew</td>
+      <td>650 Personnel</td>
       <td><span class="badge badge-success">97.5%</span></td>
-      <td>100.0% Complied</td>
-      <td style="color:var(--success);">2027-08-30 (Active)</td>
-      <td><span class="badge badge-success">Vetted</span></td>
+      <td>100.0% Certified</td>
+      <td>2027-08-30</td>
+      <td><span class="badge badge-success">Approved</span></td>
       <td><span class="badge badge-success">Low Risk</span></td>
     </tr>
   `;
