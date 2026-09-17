@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KhananRakshak | AI Smart Governance & Compliance Platform for Coal Mines</title>
+  <link rel="stylesheet" href="/style.css">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet GIS CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  
+  <!-- Chart.js & Leaflet JS -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+</head>
+<body>
+
+  <!-- Left Sidebar Navigation -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">⛏️</div>
+      <div class="brand-text">
+        <h1>KhananRakshak</h1>
+        <span>CoalGuard AI</span>
+      </div>
+    </div>
+
+    <nav class="nav-menu">
+      <a class="nav-item active" onclick="switchTab('dashboard')">
+        <span class="nav-icon">📊</span>
+        <span>HQ Executive Overview</span>
+      </a>
+      <a class="nav-item" onclick="switchTab('gis')">
+        <span class="nav-icon">🗺️</span>
+        <span>GIS Mine & Risk Map</span>
+      </a>
+      <a class="nav-item" onclick="switchTab('statutory')">
+        <span class="nav-icon">⚖️</span>
+        <span>Statutory Compliance</span>
+      </a>
+      <a class="nav-item" onclick="switchTab('inspection')">
+        <span class="nav-icon">📍</span>
+        <span>Geo-Tagged Field Audit</span>
+      </a>
+      <a class="nav-item" onclick="switchTab('ai-analytics')">
+        <span class="nav-icon">🧠</span>
+        <span>AI Risk & Anomalies</span>
+      </a>
+      <a class="nav-item" onclick="switchTab('contractors')">
+        <span class="nav-icon">👷</span>
+        <span>Contractor Compliance</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div>Ministry of Coal & CIL</div>
+      <div style="margin-top: 4px; color: var(--primary);">SIH 2024 Solution</div>
+    </div>
+  </aside>
+
+  <!-- Main Content Wrapper -->
+  <main class="main-wrapper">
+    
+    <!-- Sticky Top Header -->
+    <header class="top-header">
+      <div class="header-left">
+        <span class="header-title" id="page-title">CIL Corporate HQ Governance Center</span>
+        <div class="live-badge">
+          <span class="pulse-dot"></span>
+          <span>LIVE TELEMETRY ACTIVE</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <select id="subsidiary-filter" onchange="onSubsidiaryChange()" style="width: auto; padding: 6px 12px; font-size: 13px;">
+          <option value="">All Coal Subsidiaries (CIL Pan-India)</option>
+          <option value="BCCL">BCCL (Bharat Coking Coal)</option>
+          <option value="ECL">ECL (Eastern Coalfields)</option>
+          <option value="SECL">SECL (South Eastern Coalfields)</option>
+          <option value="MCL">MCL (Mahanadi Coalfields)</option>
+          <option value="NCL">NCL (Northern Coalfields)</option>
+        </select>
+
+        <div class="user-pill">
+          <div class="avatar">DG</div>
+          <span>Director General (DGMS / CIL)</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Body -->
+    <div class="page-container">
+
+      <!-- ================= TAB 1: DASHBOARD ================= -->
+      <section id="tab-dashboard" class="tab-content active">
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-border-accent" style="background: var(--accent);"></div>
+            <div class="kpi-title">Mines Under Digital Surveillance</div>
+            <div class="kpi-value" id="kpi-total-mines">7</div>
+            <div class="kpi-subtext">Across 7 Subsidiaries & CMPDI</div>
+          </div>
+          
+          <div class="kpi-card">
+            <div class="kpi-border-accent" style="background: var(--success);"></div>
+            <div class="kpi-title">National Statutory Index</div>
+            <div class="kpi-value" id="kpi-compliance-index">89.8%</div>
+            <div class="kpi-subtext">Mines Act 1952 / CMR 2017</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-border-accent" style="background: var(--warning);"></div>
+            <div class="kpi-title">Overdue Statutory Items</div>
+            <div class="kpi-value" id="kpi-overdue-comp" style="color: var(--warning);">2</div>
+            <div class="kpi-subtext">Requires immediate attention</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-border-accent" style="background: var(--danger);"></div>
+            <div class="kpi-title">Critical High-Risk Mines</div>
+            <div class="kpi-value" id="kpi-high-risk" style="color: var(--danger);">2</div>
+            <div class="kpi-subtext">Elevated gas / slope hazard</div>
+          </div>
+        </div>
+
+        <!-- Charts & Subsidiary Leaderboard -->
+        <div class="dashboard-grid">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">📈 Subsidiary Statutory Compliance Index (%)</h3>
+              <span class="badge badge-info">Real-Time Aggregation</span>
+            </div>
+            <canvas id="subsidiaryChart" height="130"></canvas>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">⚠️ Priority Alerts & Escalations</h3>
+            </div>
+            <div id="escalation-alerts" style="display: flex; flex-direction: column; gap: 12px;">
+              <!-- Dynamic Escalation Cards -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Monitored Mine Sites Table -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">🏭 Active Mine Operations & Risk Registry</h3>
+            <button class="btn btn-outline" onclick="loadMinesData()">🔄 Refresh Feed</button>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mine Code</th>
+                  <th>Colliery Project</th>
+                  <th>Subsidiary</th>
+                  <th>Type</th>
+                  <th>Daily Output</th>
+                  <th>Gas Telemetry / Dust</th>
+                  <th>AI Risk Index</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="mines-table-body">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 2: GIS MAPPING ================= -->
+      <section id="tab-gis" class="tab-content">
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">🗺️ Geo-Spatial Mining Risk & Compliance Heatmap</h3>
+              <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                Visualizing opencast pits, underground shafts, ambient air monitoring stations, and gas hazard zones across Indian Coalfields.
+              </p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <span class="badge badge-danger">🔴 Critical Hazard</span>
+              <span class="badge badge-warning">🟡 Elevated Risk</span>
+              <span class="badge badge-success">🟢 Compliant</span>
+            </div>
+          </div>
+          <div id="gis-map"></div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 3: STATUTORY COMPLIANCE ================= -->
+      <section id="tab-statutory" class="tab-content">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">⚖️ Statutory Compliance Master Register</h3>
+              <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                Tracking DGMS Mines Act 1952, Coal Mines Regulations 2017, CPCB/SPCB Clearances, and Labour Laws.
+              </p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn btn-outline" onclick="filterCompliance('ALL')">All</button>
+              <button class="btn btn-outline" onclick="filterCompliance('OVERDUE')" style="color: var(--danger);">Overdue</button>
+              <button class="btn btn-outline" onclick="filterCompliance('PENDING')" style="color: var(--warning);">Pending</button>
+              <button class="btn btn-outline" onclick="filterCompliance('COMPLIED')" style="color: var(--success);">Complied</button>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Item Code</th>
+                  <th>Colliery / Mine</th>
+                  <th>Category</th>
+                  <th>Statutory Mandate & Regulation</th>
+                  <th>Frequency</th>
+                  <th>Due Date</th>
+                  <th>Criticality</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="compliance-table-body">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 4: FIELD INSPECTIONS ================= -->
+      <section id="tab-inspection" class="tab-content">
+        <div class="dashboard-grid">
+          <!-- Mobile Field Reporting Simulation -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">📱 Geo-Tagged Field Inspection Form (Mobile PWA)</h3>
+              <span class="badge badge-success">GPS Locked</span>
+            </div>
+            <form id="inspection-form" onsubmit="submitInspection(event)">
+              <div class="form-group">
+                <label>Select Colliery / Mine</label>
+                <select id="insp-mine-id" required></select>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                  <label>Inspector Name</label>
+                  <input type="text" id="insp-name" value="Sunil Das" required>
+                </div>
+                <div class="form-group">
+                  <label>Designation / Agency</label>
+                  <select id="insp-role">
+                    <option value="Colliery Safety Officer">Colliery Safety Officer</option>
+                    <option value="DGMS Statutory Inspector">DGMS Statutory Inspector</option>
+                    <option value="State Pollution Board Official">State Pollution Board Official</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                  <label>Inspection Category</label>
+                  <select id="insp-type">
+                    <option value="Daily Safety & Ventilation Check">Daily Safety & Ventilation Check</option>
+                    <option value="Surprise DGMS Statutory Audit">Surprise DGMS Statutory Audit</option>
+                    <option value="Haul Road & Bench Stability Audit">Haul Road & Bench Stability Audit</option>
+                    <option value="Environmental Dust & Effluent Check">Environmental Dust & Effluent Check</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Violation Classification</label>
+                  <select id="insp-class" style="color: var(--danger); font-weight: bold;">
+                    <option value="Class A">Class A - Life Threatening (Immediate Escalation)</option>
+                    <option value="Class B">Class B - Major Operational Non-Compliance</option>
+                    <option value="Class C">Class C - Minor Observational Defect</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Field Observations & Findings</label>
+                <textarea id="insp-findings" rows="3" placeholder="Describe hazards, gas readings, or bench stability issues..." required></textarea>
+              </div>
+
+              <div class="form-group">
+                <label>Corrective Action Required</label>
+                <textarea id="insp-action" rows="2" placeholder="Prescribe rectification with SLA deadline..." required></textarea>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                  <label>GPS Coordinates (Latitude, Longitude)</label>
+                  <input type="text" id="insp-coords" value="23.7438, 86.4116" readonly style="color: var(--accent); font-family: var(--font-mono);">
+                </div>
+                <div class="form-group">
+                  <label>Digital Audit Photo Evidence</label>
+                  <input type="text" id="insp-photo" value="https://images.unsplash.com/photo-1578328819058-b69f3a3b0f6b?w=600&auto=format&fit=crop" placeholder="Photo URL or camera capture">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%;">
+                <span>📡 Submit Time-Stamped Geo-Audit</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- Inspection Log Table -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">📋 Recent Audits & Enforcement Actions</h3>
+            </div>
+            <div id="inspections-list" style="display: flex; flex-direction: column; gap: 14px; max-height: 520px; overflow-y: auto;">
+              <!-- Dynamic list -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 5: AI ANALYTICS ================= -->
+      <section id="tab-ai-analytics" class="tab-content">
+        <div class="card" style="margin-bottom: 24px;">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">🧠 AI Predictive Risk Model & Anomaly Diagnostics</h3>
+              <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                Continuous machine evaluation cross-referencing live IoT telemetry, statutory deadlines, and historical incident patterns.
+              </p>
+            </div>
+          </div>
+          <div id="ai-risk-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+            <!-- AI Cards dynamically populated -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 6: CONTRACTORS ================= -->
+      <section id="tab-contractors" class="tab-content">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="card-title">👷 Mining Contractor & Outsource Agency Governance</h3>
+              <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+                Tracking safety ratings, operator vocational training (VTC) certificates, and statutory labour insurance (ESI/EPF).
+              </p>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agency ID</th>
+                  <th>Contractor Organization</th>
+                  <th>Allocated Mine Project</th>
+                  <th>Deployed Manpower</th>
+                  <th>Safety Audit Score</th>
+                  <th>VTC Certified Operators</th>
+                  <th>Insurance Validity</th>
+                  <th>DGMS Status</th>
+                  <th>Risk Assessment</th>
+                </tr>
+              </thead>
+              <tbody id="contractors-table-body">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
