@@ -42,7 +42,7 @@ iot_readings_db: Dict[str, Dict[str, Dict[str, Any]]] = {}
 simulator_task = None
 last_sensor_sync = datetime.now()
 
-SAFETY_STATUSES = ["functional", "functional", "functional", "needs_calibration", "faulty"]
+SAFETY_STATUSES = ["functional", "functional", "functional", "functional"]
 
 
 def _mine_by_id(mine_id: str):
@@ -52,23 +52,23 @@ def _mine_by_id(mine_id: str):
 def _initial_parameter_value(mine: Dict[str, Any], parameter: str):
     gas = mine.get("gas_status", {})
     if parameter == "ch4":
-        return gas.get("ch4_pct", 0.04)
+        return min(gas.get("ch4_pct", 0.04), 0.55)
     if parameter == "co":
-        return gas.get("co_ppm", 5)
+        return min(gas.get("co_ppm", 5), 25)
     if parameter == "o2":
         return 20.8 if mine.get("type") == "Underground" else 20.9
     if parameter == "ventilation_air_velocity":
-        return 0.62 if mine.get("id") != "MINE-002" else 0.36
+        return 0.72 if mine.get("type") == "Underground" else 0.9
     if parameter == "blast_vibration":
         return 4.5
     if parameter == "respirable_dust":
-        return round(gas.get("pm10_ugm3", 120) / 100, 2)
+        return min(round(gas.get("pm10_ugm3", 120) / 100, 2), 1.65)
     if parameter == "daily_production":
         return mine.get("current_production_tonnes", 0)
     if parameter == "equipment_uptime":
-        return 87 if mine.get("risk_level") != "High" else 74
+        return 88 if mine.get("risk_level") != "High" else 84
     if parameter == "safety_equipment_status":
-        return "needs_calibration" if mine.get("risk_level") == "High" else "functional"
+        return "functional"
     return None
 
 
@@ -209,7 +209,7 @@ class SensorReading(BaseModel):
     timestamp: Optional[str] = None
 
 
-def _next_simulated_value(mine: Dict[str, Any], parameter: str, danger_spike=False):
+def _next_simulated_value(mine: Dict[str, Any], parameter: str):
     current = iot_readings_db.get(mine["id"], {}).get(parameter, {}).get("value")
     if current is None:
         current = _initial_parameter_value(mine, parameter)
@@ -219,16 +219,6 @@ def _next_simulated_value(mine: Dict[str, Any], parameter: str, danger_spike=Fal
     if parameter == "daily_production":
         target = mine.get("daily_target_tonnes", current or 1)
         return max(0, int(float(current) + random.uniform(-0.02, 0.02) * target))
-
-    if danger_spike:
-        if parameter == "o2":
-            return round(random.uniform(18.6, 18.95), 2)
-        if parameter == "ventilation_air_velocity":
-            return round(random.uniform(0.15, 0.23), 2)
-        if parameter == "equipment_uptime":
-            return round(random.uniform(48, 58), 1)
-        danger = PARAMETER_DEFINITIONS[parameter].get("danger_threshold", 1)
-        return round(float(danger) * random.uniform(1.05, 1.25), 2)
 
     drift = {
         "ch4": 0.03,
@@ -240,10 +230,20 @@ def _next_simulated_value(mine: Dict[str, Any], parameter: str, danger_spike=Fal
         "equipment_uptime": 1.8,
     }.get(parameter, 1)
     value = float(current) + random.uniform(-drift, drift)
+    if parameter == "ch4":
+        return round(min(0.62, max(0.02, value)), 2)
+    if parameter == "co":
+        return round(min(35, max(2, value)), 1)
     if parameter == "o2":
         return round(min(21.0, max(19.6, value)), 2)
+    if parameter == "ventilation_air_velocity":
+        return round(min(1.3, max(0.58, value)), 2)
+    if parameter == "blast_vibration":
+        return round(min(8.5, max(1.5, value)), 2)
+    if parameter == "respirable_dust":
+        return round(min(1.75, max(0.4, value)), 2)
     if parameter == "equipment_uptime":
-        return round(min(98, max(62, value)), 1)
+        return round(min(98, max(82, value)), 1)
     return round(max(0, value), 2)
 
 
@@ -251,19 +251,13 @@ async def iot_simulator_loop():
     await asyncio.sleep(2)
     while True:
         try:
-            danger_mine = random.choice(mines_db) if random.randint(1, 50) == 1 else None
             for mine in mines_db:
                 keys = [
                     p for p in applicable_parameters(mine.get("type"))
                     if p in SIMULATED_SENSOR_KEYS
                 ]
-                danger_parameter = None
-                if danger_mine and danger_mine["id"] == mine["id"]:
-                    options = [p for p in keys if p in ENVIRONMENTAL_KEYS]
-                    danger_parameter = random.choice(options) if options else None
-
                 for parameter in keys:
-                    value = _next_simulated_value(mine, parameter, danger_spike=(parameter == danger_parameter))
+                    value = _next_simulated_value(mine, parameter)
                     ingest_sensor_reading(mine["id"], parameter, value)
         except Exception as exc:
             print("IoT simulator tick failed:", exc)
