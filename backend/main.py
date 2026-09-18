@@ -4,11 +4,20 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import asyncio
 import os
+import random
 import uuid
 
 from backend.data import SUBSIDIARIES, SAMPLE_MINES, STATUTORY_COMPLIANCES, INSPECTION_REPORTS, CONTRACTORS
 from backend.ai_engine import MiningAIRiskEngine
+from backend.parameters import (
+    ENVIRONMENTAL_KEYS,
+    PARAMETER_DEFINITIONS,
+    SIMULATED_SENSOR_KEYS,
+    applicable_parameters,
+    parameter_status,
+)
 
 app = FastAPI(
     title="CoalGuard AI / KhananRakshak",
@@ -29,6 +38,152 @@ mines_db = list(SAMPLE_MINES)
 compliances_db = list(STATUTORY_COMPLIANCES)
 inspections_db = list(INSPECTION_REPORTS)
 contractors_db = list(CONTRACTORS)
+iot_readings_db: Dict[str, Dict[str, Dict[str, Any]]] = {}
+simulator_task = None
+last_sensor_sync = datetime.now()
+
+SAFETY_STATUSES = ["functional", "functional", "functional", "needs_calibration", "faulty"]
+
+
+def _mine_by_id(mine_id: str):
+    return next((m for m in mines_db if m["id"] == mine_id), None)
+
+
+def _initial_parameter_value(mine: Dict[str, Any], parameter: str):
+    gas = mine.get("gas_status", {})
+    if parameter == "ch4":
+        return gas.get("ch4_pct", 0.04)
+    if parameter == "co":
+        return gas.get("co_ppm", 5)
+    if parameter == "o2":
+        return 20.8 if mine.get("type") == "Underground" else 20.9
+    if parameter == "ventilation_air_velocity":
+        return 0.62 if mine.get("id") != "MINE-002" else 0.36
+    if parameter == "blast_vibration":
+        return 4.5
+    if parameter == "respirable_dust":
+        return round(gas.get("pm10_ugm3", 120) / 100, 2)
+    if parameter == "daily_production":
+        return mine.get("current_production_tonnes", 0)
+    if parameter == "equipment_uptime":
+        return 87 if mine.get("risk_level") != "High" else 74
+    if parameter == "safety_equipment_status":
+        return "needs_calibration" if mine.get("risk_level") == "High" else "functional"
+    return None
+
+
+def _record_for(mine: Dict[str, Any], parameter: str, value, timestamp=None):
+    meta = PARAMETER_DEFINITIONS[parameter]
+    status = parameter_status(
+        parameter,
+        value,
+        target_value=mine.get("daily_target_tonnes"),
+        last_inspection_date=mine.get("last_inspection_date"),
+    )
+    return {
+        "mine_id": mine["id"],
+        "parameter": parameter,
+        "label": meta["label"],
+        "category": meta["category"],
+        "device": meta["device"],
+        "placement": meta["placement"],
+        "unit": meta["unit"],
+        "value": value,
+        "status": status,
+        "timestamp": timestamp or datetime.now().isoformat(),
+        "warning_threshold": meta.get("warning_threshold"),
+        "danger_threshold": meta.get("danger_threshold"),
+        "auto_logged": parameter in ["last_inspection_date", "safety_equipment_status"],
+    }
+
+
+def _sync_mine_from_sensor(mine: Dict[str, Any], parameter: str, value):
+    gas = mine.setdefault("gas_status", {})
+    if parameter == "ch4":
+        gas["ch4_pct"] = round(float(value), 2)
+    elif parameter == "co":
+        gas["co_ppm"] = round(float(value), 1)
+    elif parameter == "respirable_dust":
+        gas["pm10_ugm3"] = round(float(value) * 100, 1)
+    elif parameter == "daily_production":
+        mine["current_production_tonnes"] = int(float(value))
+    elif parameter == "equipment_uptime":
+        mine["equipment_uptime_pct"] = round(float(value), 1)
+    elif parameter == "safety_equipment_status":
+        mine["safety_equipment_status"] = value
+
+
+def _create_iot_escalation(mine: Dict[str, Any], reading: Dict[str, Any]):
+    alert_tag = f"IoT danger alert: {reading['label']}"
+    already_open = any(
+        i.get("mine_id") == mine["id"]
+        and i.get("status") == "ESCALATED_TO_GM"
+        and alert_tag in i.get("findings", "")
+        for i in inspections_db
+    )
+    if already_open:
+        return
+
+    record = {
+        "id": f"IOT-{uuid.uuid4().hex[:6].upper()}",
+        "mine_id": mine["id"],
+        "mine_name": mine["name"],
+        "inspector_name": "KhananRakshak IoT Gateway",
+        "inspector_role": "Automated Sensor Logger",
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "lat": mine["lat"],
+        "lng": mine["lng"],
+        "type": "Automatic IoT Threshold Breach",
+        "findings": f"{alert_tag} reached {reading['value']} {reading['unit']} at {mine['name']}.",
+        "violation_class": "Class A",
+        "corrective_action_required": "Dispatch safety officer, isolate affected zone, and verify sensor calibration.",
+        "sla_deadline": datetime.now().strftime("%Y-%m-%d 18:00:00"),
+        "status": "ESCALATED_TO_GM",
+        "photo_url": "/static/iot_sensor_alert.jpg"
+    }
+    inspections_db.insert(0, record)
+    mine["active_violations"] = mine.get("active_violations", 0) + 1
+    mine["risk_level"] = "High"
+
+
+def ingest_sensor_reading(mine_id: str, parameter: str, value, timestamp: Optional[str] = None):
+    global last_sensor_sync
+    mine = _mine_by_id(mine_id)
+    if not mine:
+        raise HTTPException(status_code=404, detail="Mine not found")
+    if parameter not in applicable_parameters(mine.get("type")):
+        raise HTTPException(status_code=400, detail="Parameter is not applicable for this mine type")
+
+    reading = _record_for(mine, parameter, value, timestamp)
+    iot_readings_db.setdefault(mine_id, {})[parameter] = reading
+    _sync_mine_from_sensor(mine, parameter, value)
+    last_sensor_sync = datetime.now()
+
+    if parameter in ENVIRONMENTAL_KEYS and reading["status"] == "critical":
+        _create_iot_escalation(mine, reading)
+    return reading
+
+
+def init_iot_state():
+    for mine in mines_db:
+        for parameter in applicable_parameters(mine.get("type")):
+            value = mine.get("last_inspection_date") if parameter == "last_inspection_date" else _initial_parameter_value(mine, parameter)
+            ingest_sensor_reading(mine["id"], parameter, value)
+
+
+def get_mine_parameter_snapshot(mine: Dict[str, Any]):
+    existing = iot_readings_db.setdefault(mine["id"], {})
+    rows = []
+    for parameter in applicable_parameters(mine.get("type")):
+        if parameter == "last_inspection_date":
+            existing[parameter] = _record_for(mine, parameter, mine.get("last_inspection_date"))
+        elif parameter not in existing:
+            ingest_sensor_reading(mine["id"], parameter, _initial_parameter_value(mine, parameter))
+        rows.append(existing[parameter])
+    return rows
+
+
+init_iot_state()
 
 # Models
 class NewInspection(BaseModel):
@@ -46,6 +201,80 @@ class NewInspection(BaseModel):
 class ComplianceStatusUpdate(BaseModel):
     status: str
     notes: Optional[str] = None
+
+class SensorReading(BaseModel):
+    mine_id: str
+    parameter: str
+    value: Any
+    timestamp: Optional[str] = None
+
+
+def _next_simulated_value(mine: Dict[str, Any], parameter: str, danger_spike=False):
+    current = iot_readings_db.get(mine["id"], {}).get(parameter, {}).get("value")
+    if current is None:
+        current = _initial_parameter_value(mine, parameter)
+
+    if parameter == "safety_equipment_status":
+        return random.choice(SAFETY_STATUSES) if random.randint(1, 40) == 1 else current
+    if parameter == "daily_production":
+        target = mine.get("daily_target_tonnes", current or 1)
+        return max(0, int(float(current) + random.uniform(-0.02, 0.02) * target))
+
+    if danger_spike:
+        if parameter == "o2":
+            return round(random.uniform(18.6, 18.95), 2)
+        if parameter == "ventilation_air_velocity":
+            return round(random.uniform(0.15, 0.23), 2)
+        if parameter == "equipment_uptime":
+            return round(random.uniform(48, 58), 1)
+        danger = PARAMETER_DEFINITIONS[parameter].get("danger_threshold", 1)
+        return round(float(danger) * random.uniform(1.05, 1.25), 2)
+
+    drift = {
+        "ch4": 0.03,
+        "co": 2.5,
+        "o2": 0.06,
+        "ventilation_air_velocity": 0.05,
+        "blast_vibration": 1.0,
+        "respirable_dust": 0.12,
+        "equipment_uptime": 1.8,
+    }.get(parameter, 1)
+    value = float(current) + random.uniform(-drift, drift)
+    if parameter == "o2":
+        return round(min(21.0, max(19.6, value)), 2)
+    if parameter == "equipment_uptime":
+        return round(min(98, max(62, value)), 1)
+    return round(max(0, value), 2)
+
+
+async def iot_simulator_loop():
+    await asyncio.sleep(2)
+    while True:
+        try:
+            danger_mine = random.choice(mines_db) if random.randint(1, 50) == 1 else None
+            for mine in mines_db:
+                keys = [
+                    p for p in applicable_parameters(mine.get("type"))
+                    if p in SIMULATED_SENSOR_KEYS
+                ]
+                danger_parameter = None
+                if danger_mine and danger_mine["id"] == mine["id"]:
+                    options = [p for p in keys if p in ENVIRONMENTAL_KEYS]
+                    danger_parameter = random.choice(options) if options else None
+
+                for parameter in keys:
+                    value = _next_simulated_value(mine, parameter, danger_spike=(parameter == danger_parameter))
+                    ingest_sensor_reading(mine["id"], parameter, value)
+        except Exception as exc:
+            print("IoT simulator tick failed:", exc)
+        await asyncio.sleep(20)
+
+
+@app.on_event("startup")
+async def start_iot_simulator():
+    global simulator_task
+    if simulator_task is None or simulator_task.done():
+        simulator_task = asyncio.create_task(iot_simulator_loop())
 
 # --- API Endpoints ---
 
@@ -87,6 +316,11 @@ def get_national_overview():
         "high_risk_mines_count": len(high_risk_mines),
         "overdue_statutory_items": len(overdue_compliances),
         "active_safety_violations": len(open_violations),
+        "active_iot_sensors": sum(
+            len([p for p in applicable_parameters(m.get("type")) if p in SIMULATED_SENSOR_KEYS])
+            for m in mines_db
+        ),
+        "last_sensor_sync_seconds": max(0, int((datetime.now() - last_sensor_sync).total_seconds())),
         "subsidiary_breakdown": sub_stats
     }
 
@@ -102,11 +336,17 @@ def list_mines(subsidiary: Optional[str] = None, risk_filter: Optional[str] = No
             
         ai_assessment = MiningAIRiskEngine.calculate_mine_risk_score(mine, compliances_db, inspections_db)
         anomaly = MiningAIRiskEngine.detect_production_compliance_anomaly(mine)
+        params = get_mine_parameter_snapshot(mine)
+        uptime = next((p for p in params if p["parameter"] == "equipment_uptime"), None)
+        safety_status = next((p for p in params if p["parameter"] == "safety_equipment_status"), None)
         
         results.append({
             **mine,
             "ai_risk_assessment": ai_assessment,
-            "production_anomaly": anomaly
+            "production_anomaly": anomaly,
+            "equipment_uptime_pct": uptime["value"] if uptime else None,
+            "safety_equipment_status": safety_status["value"] if safety_status else "functional",
+            "parameter_count": len(params)
         })
     return results
 
@@ -129,8 +369,32 @@ def get_mine_details(mine_id: str):
         "compliances": mine_compliances,
         "inspections": mine_inspections,
         "contractors": mine_contractors,
+        "parameters": get_mine_parameter_snapshot(mine),
         "ai_risk_report": ai_risk,
         "production_anomaly": anomaly
+    }
+
+@app.post("/iot/ingest")
+@app.post("/api/iot/ingest")
+def ingest_iot_reading(payload: SensorReading):
+    """Accept a real or simulated IoT sensor reading."""
+    reading = ingest_sensor_reading(payload.mine_id, payload.parameter, payload.value, payload.timestamp)
+    return {"message": "IoT reading logged", "reading": reading}
+
+@app.get("/mines/{mine_id}/parameters")
+@app.get("/api/mines/{mine_id}/parameters")
+def get_mine_parameters(mine_id: str):
+    """Current parameter values for one mine, grouped for the UI panel."""
+    mine = _mine_by_id(mine_id)
+    if not mine:
+        raise HTTPException(status_code=404, detail="Mine not found")
+    rows = get_mine_parameter_snapshot(mine)
+    return {
+        "mine_id": mine["id"],
+        "mine_name": mine["name"],
+        "mine_type": mine["type"],
+        "last_synced_seconds": max(0, int((datetime.now() - last_sensor_sync).total_seconds())),
+        "parameters": rows
     }
 
 @app.get("/api/compliances")
@@ -195,6 +459,8 @@ def submit_field_inspection(insp: NewInspection):
     # Recalculate mine risk level if Class A
     if mine:
         mine["active_violations"] = mine.get("active_violations", 0) + 1
+        mine["last_inspection_date"] = record["date"][:10]
+        ingest_sensor_reading(mine["id"], "last_inspection_date", mine["last_inspection_date"])
         if insp.violation_class == "Class A":
             mine["risk_level"] = "High"
 
