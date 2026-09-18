@@ -414,6 +414,31 @@ tbody tr:hover {
   line-height: 1.45;
 }
 
+.colliery-summary {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: #f9fafb;
+}
+
+.colliery-summary span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 3px;
+}
+
+.colliery-summary strong {
+  font-size: 12.5px;
+  color: var(--primary-navy);
+}
+
 .modal-backdrop {
   display: none;
   position: fixed;
@@ -467,6 +492,52 @@ tbody tr:hover {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
+
+.hazard-probability {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: #f9fafb;
+}
+
+.hazard-probability > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.hazard-probability span {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  font-weight: 700;
+}
+
+.hazard-probability strong {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--primary-navy);
+}
+
+.hazard-meter {
+  height: 8px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: #e5e7eb;
+}
+
+.hazard-meter div {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.hazard-low .hazard-meter div { background: var(--gov-green); }
+.hazard-medium .hazard-meter div { background: #d97706; }
+.hazard-high .hazard-meter div { background: #dc2626; }
 
 .footer-action {
   border: 1px solid var(--border-color);

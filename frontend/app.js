@@ -203,12 +203,49 @@ async function openParameterModal(mineId) {
   modal.setAttribute('aria-hidden', 'false');
 
   try {
-    const res = await fetch(`/api/mines/${mineId}/parameters`);
-    const data = await res.json();
-    title.textContent = `${data.mine_name} Parameters`;
-    subtitle.textContent = `${data.mine_type} mine | Last synced: ${data.last_synced_seconds}s ago`;
+    const [paramRes, detailRes] = await Promise.all([
+      fetch(`/api/mines/${mineId}/parameters`),
+      fetch(`/api/mines/${mineId}`)
+    ]);
+    const data = await paramRes.json();
+    const details = await detailRes.json();
+    const mine = details.mine;
+    const risk = details.ai_risk_report;
+    const anomaly = details.production_anomaly;
 
-    content.innerHTML = data.parameters.map(p => `
+    title.textContent = `Colliery Project: ${mine.name}`;
+    subtitle.textContent = `${mine.id} | ${mine.subsidiary} | ${mine.type} mine | Last synced: ${data.last_synced_seconds}s ago`;
+
+    const projectSummary = `
+      <div class="colliery-summary">
+        <div>
+          <span>Area</span>
+          <strong>${mine.area}</strong>
+        </div>
+        <div>
+          <span>Manager</span>
+          <strong>${mine.manager_name}</strong>
+        </div>
+        <div>
+          <span>Safety Officer</span>
+          <strong>${mine.safety_officer}</strong>
+        </div>
+        <div>
+          <span>Daily Production</span>
+          <strong>${mine.current_production_tonnes.toLocaleString()} MT</strong>
+        </div>
+        <div>
+          <span>AI Risk</span>
+          <strong>${risk.risk_score}/100 (${risk.risk_status})</strong>
+        </div>
+        <div>
+          <span>Production Check</span>
+          <strong>${anomaly.is_anomaly ? anomaly.anomaly_type : 'NORMAL'}</strong>
+        </div>
+      </div>
+    `;
+
+    const parameterCards = data.parameters.map(p => `
       <div class="parameter-card">
         <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
           <div class="parameter-card-title">${p.label}</div>
@@ -222,6 +259,8 @@ async function openParameterModal(mineId) {
         </div>
       </div>
     `).join('');
+
+    content.innerHTML = projectSummary + parameterCards;
   } catch (err) {
     content.innerHTML = '<div class="gov-alert gov-alert-danger">Unable to load mine parameters.</div>';
   }
@@ -600,6 +639,9 @@ function renderAIAnalyticsCards(mines) {
       solutions.push('Verify production data against EC limits and check equipment/shift stoppage logs.');
     }
 
+    const probability = ai.predicted_incident_probability_pct;
+    const probabilityClass = probability >= 60 ? 'hazard-high' : (probability >= 35 ? 'hazard-medium' : 'hazard-low');
+
     const card = document.createElement('div');
     card.style.cssText = "background:#ffffff; border:1px solid var(--border-color); border-radius:var(--radius); padding:16px;";
     card.innerHTML = `
@@ -609,6 +651,16 @@ function renderAIAnalyticsCards(mines) {
           <div style="font-size:12px; color:var(--text-light);">${mine.subsidiary} &bull; ${mine.type} Mine</div>
         </div>
         <span class="badge ${badgeClass}">${ai.risk_status}</span>
+      </div>
+
+      <div class="hazard-probability ${probabilityClass}">
+        <div>
+          <span>Statistical Hazard Probability</span>
+          <strong>${probability}%</strong>
+        </div>
+        <div class="hazard-meter">
+          <div style="width:${probability}%;"></div>
+        </div>
       </div>
 
       <div class="breach-solution-grid">
@@ -627,7 +679,7 @@ function renderAIAnalyticsCards(mines) {
       </div>
 
       <div style="font-size:11.5px; color:var(--text-light); margin-top:10px;">
-        Risk score: ${ai.risk_score}/100 | Incident probability: ${ai.predicted_incident_probability_pct}%
+        Risk score: ${ai.risk_score}/100
       </div>
     `;
     container.appendChild(card);
