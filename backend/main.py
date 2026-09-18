@@ -265,7 +265,6 @@ async def iot_simulator_loop():
                 for parameter in keys:
                     value = _next_simulated_value(mine, parameter, danger_spike=(parameter == danger_parameter))
                     ingest_sensor_reading(mine["id"], parameter, value)
-            # TODO: move simulator interval to config if we keep this after SIH demo.
         except Exception as exc:
             print("IoT simulator tick failed:", exc)
         await asyncio.sleep(20)
