@@ -228,36 +228,6 @@
         </div>
       </div>
 
-      <div class="panel">
-        <div class="panel-header">
-          <div>
-            <div class="panel-title">Drone Simulation: Priority Mine Recon</div>
-            <div class="panel-subtitle">Prototype scan over the best-priority mine for drone surveillance</div>
-          </div>
-          <span class="badge badge-info" id="drone-priority-badge">Classifying...</span>
-        </div>
-        <div class="panel-body">
-          <div class="drone-sim-layout">
-            <div class="drone-field">
-              <div class="drone-grid"></div>
-              <div class="drone-pit pit-a"></div>
-              <div class="drone-pit pit-b"></div>
-              <div class="drone-path"></div>
-              <div class="drone-unit">DRN-01</div>
-              <div class="drone-hotspot hotspot-a"></div>
-              <div class="drone-hotspot hotspot-b"></div>
-            </div>
-            <div class="drone-readout">
-              <div class="parameter-card-title" id="drone-mine-name">Selecting mine...</div>
-              <div class="parameter-value" id="drone-classification">--</div>
-              <div class="parameter-meta" id="drone-reason">Risk model is selecting the first mine for prototype surveillance.</div>
-              <div class="gov-alert gov-alert-info" style="margin-top:12px; margin-bottom:0;">
-                Simulated output: bench stability, dust plume, perimeter movement, and stockpile scan confidence.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </section>
 
     <!-- ================= TAB 3: STATUTORY COMPLIANCE ================= -->
@@ -410,13 +380,13 @@
       <div class="panel">
         <div class="panel-header">
           <div>
-            <div class="panel-title">AI Predictive Risk Model & Anomaly Diagnostics</div>
-            <div class="panel-subtitle">Automated evaluation integrating gas telemetry, overdue statutory compliances, and historical violations</div>
+            <div class="panel-title">AI Risk & Anomaly Assessment</div>
+            <div class="panel-subtitle">Only active breaches are shown, with the required solution beside each issue</div>
           </div>
         </div>
         <div class="panel-body">
           <div class="gov-alert gov-alert-info" style="margin-bottom:16px;">
-            Risk computed from: CH4, CO, O2, respirable dust, ventilation, blast vibration, overdue compliance items, active violations, and equipment uptime.
+            This section filters out normal mines and shows only detected breaches, anomalies, and escalations.
           </div>
           <div id="ai-risk-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px;">
             <!-- AI Cards dynamically populated -->

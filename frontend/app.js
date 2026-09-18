@@ -187,7 +187,6 @@ async function loadMinesData() {
 
     renderAIAnalyticsCards(allMines);
     renderComplianceOpsSummary(allMines);
-    renderDroneSimulation(allMines);
   } catch (err) {
     console.error("Failed to load mines:", err);
   }
@@ -249,31 +248,6 @@ function renderComplianceOpsSummary(mines) {
       </div>
     `;
   }).join('');
-}
-
-function renderDroneSimulation(mines) {
-  const nameEl = document.getElementById('drone-mine-name');
-  const classEl = document.getElementById('drone-classification');
-  const reasonEl = document.getElementById('drone-reason');
-  const badgeEl = document.getElementById('drone-priority-badge');
-  if (!nameEl || !mines.length) return;
-
-  const sorted = [...mines].sort((a, b) => {
-    const scoreA = (a.ai_risk_assessment?.risk_score || 0) + (a.active_violations || 0) * 8;
-    const scoreB = (b.ai_risk_assessment?.risk_score || 0) + (b.active_violations || 0) * 8;
-    return scoreB - scoreA;
-  });
-
-  const mine = sorted[0];
-  const score = mine.ai_risk_assessment?.risk_score || 0;
-  const classification = score >= 70 ? 'Best Target: Critical Recon' : (score >= 40 ? 'Best Target: Preventive Recon' : 'Best Target: Baseline Survey');
-  const confidence = Math.min(98, Math.round(72 + score / 3));
-
-  nameEl.textContent = `${mine.name} (${mine.id})`;
-  classEl.textContent = classification;
-  reasonEl.textContent = `Selected from current mine registry using risk score ${score}, ${mine.active_violations} active violation(s), ${mine.safety_equipment_status || 'functional'} equipment status, and production variance. Scan confidence: ${confidence}%.`;
-  badgeEl.textContent = mine.subsidiary;
-  badgeEl.className = score >= 70 ? 'badge badge-danger' : (score >= 40 ? 'badge badge-warning' : 'badge badge-success');
 }
 
 async function openSensorConsole() {
@@ -587,13 +561,44 @@ function renderAIAnalyticsCards(mines) {
   const container = document.getElementById('ai-risk-cards');
   container.innerHTML = '';
 
-  mines.forEach(mine => {
+  const breachedMines = mines.filter(mine => {
+    const ai = mine.ai_risk_assessment;
+    const anomaly = mine.production_anomaly;
+    return (
+      mine.active_violations > 0 ||
+      anomaly.is_anomaly ||
+      ai.risk_status.includes('HAZARD') ||
+      ai.risk_status.includes('RISK') ||
+      (ai.primary_factors || []).some(f => !f.includes('within DGMS/CPCB limits'))
+    );
+  });
+
+  if (!breachedMines.length) {
+    container.innerHTML = `
+      <div class="gov-alert gov-alert-info">
+        No active breaches detected. Sensor values, compliance records, and inspection status are currently within acceptable limits.
+      </div>
+    `;
+    return;
+  }
+
+  breachedMines.forEach(mine => {
     const ai = mine.ai_risk_assessment;
     const anomaly = mine.production_anomaly;
 
     let badgeClass = 'badge-success';
     if (ai.risk_status.includes('HAZARD')) badgeClass = 'badge-danger';
     else if (ai.risk_status.includes('RISK')) badgeClass = 'badge-warning';
+
+    const breaches = [...ai.primary_factors];
+    if (anomaly.is_anomaly) {
+      breaches.push(anomaly.description);
+    }
+
+    const solutions = [...ai.ai_corrective_recommendations];
+    if (anomaly.is_anomaly) {
+      solutions.push('Verify production data against EC limits and check equipment/shift stoppage logs.');
+    }
 
     const card = document.createElement('div');
     card.style.cssText = "background:#ffffff; border:1px solid var(--border-color); border-radius:var(--radius); padding:16px;";
@@ -603,36 +608,27 @@ function renderAIAnalyticsCards(mines) {
           <div style="font-weight:700; color:var(--primary-navy); font-size:14px;">${mine.name}</div>
           <div style="font-size:12px; color:var(--text-light);">${mine.subsidiary} &bull; ${mine.type} Mine</div>
         </div>
-        <span class="badge ${badgeClass}">Score: ${ai.risk_score} / 100</span>
+        <span class="badge ${badgeClass}">${ai.risk_status}</span>
       </div>
 
-      <div style="font-size:12.5px; margin-bottom:10px;">
-        <strong>Statistical Hazard Probability:</strong> ${ai.predicted_incident_probability_pct}%
-      </div>
-
-      <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
-        Risk inputs include sensor status, equipment uptime, overdue compliance, active violations, and production variance.
-      </div>
-
-      <div style="margin-bottom:12px;">
-        <div style="font-size:11.5px; font-weight:600; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Contributing Risk Factors</div>
-        <ul style="padding-left:18px; font-size:12px; color:var(--text-main);">
-          ${ai.primary_factors.map(f => `<li style="margin-bottom:3px;">${f}</li>`).join('')}
-        </ul>
-      </div>
-
-      <div class="gov-alert gov-alert-warning" style="margin-bottom:8px; font-size:12px;">
-        <strong style="display:block; margin-bottom:3px;">Prescribed Compliance Action:</strong>
-        <ul style="padding-left:16px; margin:0;">
-          ${ai.ai_corrective_recommendations.map(r => `<li>${r}</li>`).join('')}
-        </ul>
-      </div>
-
-      ${anomaly.is_anomaly ? `
-        <div class="gov-alert gov-alert-danger" style="margin:0; font-size:11.5px;">
-          <strong>Operational / EC Anomaly:</strong> ${anomaly.description}
+      <div class="breach-solution-grid">
+        <div class="gov-alert gov-alert-danger" style="margin:0;">
+          <strong style="display:block; margin-bottom:6px;">Breach</strong>
+          <ul style="padding-left:16px; margin:0;">
+            ${breaches.map(f => `<li>${f}</li>`).join('')}
+          </ul>
         </div>
-      ` : ''}
+        <div class="gov-alert gov-alert-warning" style="margin:0;">
+          <strong style="display:block; margin-bottom:6px;">Solution</strong>
+          <ul style="padding-left:16px; margin:0;">
+            ${solutions.map(r => `<li>${r}</li>`).join('')}
+          </ul>
+        </div>
+      </div>
+
+      <div style="font-size:11.5px; color:var(--text-light); margin-top:10px;">
+        Risk score: ${ai.risk_score}/100 | Incident probability: ${ai.predicted_incident_probability_pct}%
+      </div>
     `;
     container.appendChild(card);
   });
