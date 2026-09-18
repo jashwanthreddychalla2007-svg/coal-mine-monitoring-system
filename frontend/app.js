@@ -17,6 +17,7 @@ const sectionTitles = {
 
 document.addEventListener("DOMContentLoaded", () => {
   initDashboard();
+  setInterval(refreshOperationalData, 30000);
 });
 
 async function initDashboard() {
@@ -25,6 +26,18 @@ async function initDashboard() {
   await loadCompliancesData();
   await loadInspectionsData();
   await loadContractorsData();
+}
+
+async function refreshOperationalData() {
+  await loadOverview();
+  await loadMinesData();
+  await loadInspectionsData();
+}
+
+function getStatusBadgeClass(status) {
+  if (status === 'critical') return 'badge-danger';
+  if (status === 'warning') return 'badge-warning';
+  return 'badge-success';
 }
 
 // Tab Switching
@@ -67,6 +80,11 @@ async function loadOverview() {
     document.getElementById('kpi-compliance-index').textContent = `${data.national_compliance_index_pct}%`;
     document.getElementById('kpi-overdue-comp').textContent = data.overdue_statutory_items;
     document.getElementById('kpi-high-risk').textContent = data.high_risk_mines_count;
+    document.getElementById('kpi-active-sensors').textContent = data.active_iot_sensors;
+    document.getElementById('kpi-sensor-meta').textContent = `${data.active_iot_sensors} sensors across ${data.total_active_mines_monitored} mines`;
+
+    const syncBadge = document.getElementById('last-sync-badge');
+    if (syncBadge) syncBadge.textContent = `Last synced: ${data.last_sensor_sync_seconds}s ago`;
 
     renderSubsidiaryChart(data.subsidiary_breakdown);
   } catch (err) {
@@ -136,12 +154,8 @@ async function loadMinesData() {
       if (risk.risk_status.includes('HAZARD')) badgeClass = 'badge-danger';
       else if (risk.risk_status.includes('RISK')) badgeClass = 'badge-warning';
 
-      let telemetry = '';
-      if (mine.type === 'Underground') {
-        telemetry = `CH4: ${mine.gas_status.ch4_pct}% | CO: ${mine.gas_status.co_ppm} ppm`;
-      } else {
-        telemetry = `PM10: ${mine.gas_status.pm10_ugm3} µg/m³`;
-      }
+      const uptime = mine.equipment_uptime_pct ?? 0;
+      const uptimeClass = uptime < 60 ? 'badge-danger' : (uptime < 80 ? 'badge-warning' : 'badge-success');
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -150,7 +164,11 @@ async function loadMinesData() {
         <td><span class="badge badge-neutral">${mine.subsidiary}</span></td>
         <td>${mine.type}</td>
         <td>${mine.current_production_tonnes.toLocaleString()} MT</td>
-        <td style="font-size: 12px;">${telemetry}</td>
+        <td><span class="badge ${uptimeClass}">${uptime}%</span></td>
+        <td>
+          <button class="btn btn-secondary btn-sm" onclick="openParameterModal('${mine.id}')">View Parameters</button>
+          <div style="font-size:11px; color:var(--text-light); margin-top:4px;">${mine.parameter_count} live signals</div>
+        </td>
         <td><span class="badge ${badgeClass}">${risk.risk_score} - ${risk.risk_status}</span></td>
         <td>${mine.active_violations > 0 ? `<span class="badge badge-danger">${mine.active_violations} Violation(s)</span>` : '<span class="badge badge-success">Nil</span>'}</td>
         <td>
@@ -167,9 +185,68 @@ async function loadMinesData() {
     });
 
     renderAIAnalyticsCards(allMines);
+    renderComplianceOpsSummary(allMines);
   } catch (err) {
     console.error("Failed to load mines:", err);
   }
+}
+
+async function openParameterModal(mineId) {
+  const modal = document.getElementById('parameter-modal');
+  const content = document.getElementById('parameter-modal-content');
+  const title = document.getElementById('parameter-modal-title');
+  const subtitle = document.getElementById('parameter-modal-subtitle');
+
+  content.innerHTML = '<div class="gov-alert gov-alert-info">Loading current sensor readings...</div>';
+  modal.classList.add('active');
+  modal.setAttribute('aria-hidden', 'false');
+
+  try {
+    const res = await fetch(`/api/mines/${mineId}/parameters`);
+    const data = await res.json();
+    title.textContent = `${data.mine_name} Parameters`;
+    subtitle.textContent = `${data.mine_type} mine | Last synced: ${data.last_synced_seconds}s ago`;
+
+    content.innerHTML = data.parameters.map(p => `
+      <div class="parameter-card">
+        <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+          <div class="parameter-card-title">${p.label}</div>
+          <span class="badge ${getStatusBadgeClass(p.status)}">${p.status}</span>
+        </div>
+        <div class="parameter-value">${p.value} ${p.unit || ''}</div>
+        <div class="parameter-meta">
+          ${p.device}<br>
+          ${p.placement}<br>
+          ${p.warning_threshold !== null && p.warning_threshold !== undefined ? `Warning: ${p.warning_threshold} | Danger: ${p.danger_threshold}` : 'Event-driven / auto-logged'}
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    content.innerHTML = '<div class="gov-alert gov-alert-danger">Unable to load mine parameters.</div>';
+  }
+}
+
+function closeParameterModal() {
+  const modal = document.getElementById('parameter-modal');
+  modal.classList.remove('active');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function renderComplianceOpsSummary(mines) {
+  const container = document.getElementById('compliance-ops-summary');
+  if (!container) return;
+
+  container.innerHTML = mines.map(mine => {
+    const status = mine.safety_equipment_status || 'functional';
+    const badgeClass = status === 'faulty' ? 'badge-danger' : (status === 'needs_calibration' ? 'badge-warning' : 'badge-success');
+    return `
+      <div class="mini-card">
+        <div style="font-size:12px; font-weight:700; color:var(--primary-navy); margin-bottom:6px;">${mine.name}</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">Last inspection: <strong>${mine.last_inspection_date}</strong> <span class="badge badge-info">Auto-logged</span></div>
+        <div>Safety equipment: <span class="badge ${badgeClass}">${status.replace('_', ' ')}</span></div>
+      </div>
+    `;
+  }).join('');
 }
 
 // 3. Leaflet GIS Map (Clean Government OpenStreetMap Styling)
@@ -395,6 +472,10 @@ function renderAIAnalyticsCards(mines) {
 
       <div style="font-size:12.5px; margin-bottom:10px;">
         <strong>Statistical Hazard Probability:</strong> ${ai.predicted_incident_probability_pct}%
+      </div>
+
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        Risk inputs include sensor status, equipment uptime, overdue compliance, active violations, and production variance.
       </div>
 
       <div style="margin-bottom:12px;">

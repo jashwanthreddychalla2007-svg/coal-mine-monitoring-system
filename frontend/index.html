@@ -118,6 +118,12 @@
           <div class="kpi-value" id="kpi-high-risk" style="color: #dc2626;">2</div>
           <div class="kpi-meta">Elevated gas or slope hazard</div>
         </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Active IoT Sensors</div>
+          <div class="kpi-value" id="kpi-active-sensors">0</div>
+          <div class="kpi-meta" id="kpi-sensor-meta">Simulated live feed</div>
+        </div>
       </div>
 
       <!-- Split Chart & Alert Section -->
@@ -156,7 +162,10 @@
             <div class="panel-title">Monitored Mine Operations Registry</div>
             <div class="panel-subtitle">Real-time status of production, environmental telemetry, and compliance metrics</div>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="loadMinesData()">Refresh Data</button>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="badge badge-info" id="last-sync-badge">Last synced: --</span>
+            <button class="btn btn-secondary btn-sm" onclick="refreshOperationalData()">Refresh Data</button>
+          </div>
         </div>
         <div class="table-responsive">
           <table>
@@ -167,7 +176,8 @@
                 <th>Subsidiary</th>
                 <th>Operation Type</th>
                 <th>Daily Production</th>
-                <th>Gas / Dust Telemetry</th>
+                <th>Equipment Uptime</th>
+                <th>Parameters</th>
                 <th>AI Risk Score</th>
                 <th>Active Violations</th>
                 <th>Action</th>
@@ -199,6 +209,24 @@
           <div id="gis-map"></div>
         </div>
       </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Planned: Drone Surveillance Layer</div>
+            <div class="panel-subtitle">Future scope only, not implemented in this prototype</div>
+          </div>
+          <span class="badge badge-neutral">Roadmap</span>
+        </div>
+        <div class="panel-body">
+          <ul class="roadmap-list">
+            <li>Opencast pit-wall & bench mapping (thermal + RGB) for slope stability / crack detection</li>
+            <li>Hazardous-zone gas mapping over abandoned workings or subsidence areas</li>
+            <li>Stockpile volume estimation via LiDAR/photogrammetry</li>
+            <li>Perimeter/illegal mining surveillance via periodic autonomous flight</li>
+          </ul>
+        </div>
+      </div>
     </section>
 
     <!-- ================= TAB 3: STATUTORY COMPLIANCE ================= -->
@@ -214,6 +242,13 @@
             <button class="btn btn-secondary btn-sm" onclick="filterCompliance('OVERDUE')" style="color: #dc2626;">Overdue</button>
             <button class="btn btn-secondary btn-sm" onclick="filterCompliance('PENDING')" style="color: #d97706;">Pending</button>
             <button class="btn btn-secondary btn-sm" onclick="filterCompliance('COMPLIED')" style="color: #15803d;">Complied</button>
+          </div>
+        </div>
+
+        <div class="panel-body" style="border-bottom:1px solid var(--border-color);">
+          <div class="panel-subtitle" style="margin-bottom:10px;">Auto-logged operational compliance signals</div>
+          <div id="compliance-ops-summary" class="mini-card-grid">
+            <!-- Dynamic status cards -->
           </div>
         </div>
 
@@ -349,6 +384,9 @@
           </div>
         </div>
         <div class="panel-body">
+          <div class="gov-alert gov-alert-info" style="margin-bottom:16px;">
+            Risk computed from: CH4, CO, O2, respirable dust, ventilation, blast vibration, overdue compliance items, active violations, and equipment uptime.
+          </div>
           <div id="ai-risk-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px;">
             <!-- AI Cards dynamically populated -->
           </div>
@@ -389,6 +427,23 @@
     </section>
 
   </main>
+
+  <div id="parameter-modal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div>
+          <div class="panel-title" id="parameter-modal-title">Mine Parameters</div>
+          <div class="panel-subtitle" id="parameter-modal-subtitle">Live IoT readings and compliance signals</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="closeParameterModal()">Close</button>
+      </div>
+      <div class="modal-body">
+        <div id="parameter-modal-content" class="parameter-grid">
+          <!-- Dynamic parameter cards -->
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Official Footer -->
   <footer class="gov-footer">
