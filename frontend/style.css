@@ -462,6 +462,142 @@ tbody tr:hover {
   line-height: 1.7;
 }
 
+.drone-sim-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.4fr) minmax(260px, 0.8fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.drone-field {
+  position: relative;
+  min-height: 280px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(140deg, rgba(21, 128, 61, 0.14), rgba(249, 115, 22, 0.10)),
+    #edf2ee;
+}
+
+.drone-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(11, 57, 84, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 57, 84, 0.12) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+.drone-pit {
+  position: absolute;
+  border: 2px solid rgba(120, 53, 15, 0.45);
+  background: rgba(180, 83, 9, 0.24);
+  transform: rotate(-9deg);
+}
+
+.pit-a {
+  width: 210px;
+  height: 108px;
+  left: 58px;
+  top: 92px;
+  border-radius: 48% 42% 52% 38%;
+}
+
+.pit-b {
+  width: 135px;
+  height: 74px;
+  right: 58px;
+  bottom: 52px;
+  border-radius: 44% 54% 38% 50%;
+}
+
+.drone-path {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 48%;
+  border-top: 2px dashed rgba(29, 78, 216, 0.65);
+}
+
+.drone-unit {
+  position: absolute;
+  top: 45px;
+  left: 62px;
+  width: 64px;
+  height: 28px;
+  border-radius: 4px;
+  background: var(--primary-navy);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  animation: droneSweep 7s linear infinite;
+}
+
+.drone-unit::before,
+.drone-unit::after {
+  content: "";
+  position: absolute;
+  top: 9px;
+  width: 20px;
+  height: 2px;
+  background: #ffffff;
+}
+
+.drone-unit::before { left: -16px; }
+.drone-unit::after { right: -16px; }
+
+.drone-hotspot {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #dc2626;
+  box-shadow: 0 0 0 8px rgba(220, 38, 38, 0.16);
+}
+
+.hotspot-a { left: 230px; top: 116px; }
+.hotspot-b { right: 118px; bottom: 86px; background: #d97706; box-shadow: 0 0 0 8px rgba(217, 119, 6, 0.16); }
+
+.drone-readout {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 16px;
+  background: #ffffff;
+}
+
+.footer-action {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: var(--primary-blue);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 10px;
+}
+
+.footer-action:hover {
+  background: #f9fafb;
+}
+
+@keyframes droneSweep {
+  0% { transform: translate(0, 0); }
+  35% { transform: translate(58vw, 105px); }
+  70% { transform: translate(18vw, 190px); }
+  100% { transform: translate(0, 0); }
+}
+
+@media (max-width: 860px) {
+  .drone-sim-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Forms & Buttons */
 .form-grid {
   display: grid;

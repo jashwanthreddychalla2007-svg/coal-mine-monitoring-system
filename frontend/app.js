@@ -5,6 +5,7 @@ let allInspections = [];
 let gisMap = null;
 let mapMarkers = [];
 let chartInstance = null;
+let sensorConsoleData = null;
 
 const sectionTitles = {
   'dashboard': 'Executive Overview',
@@ -186,6 +187,7 @@ async function loadMinesData() {
 
     renderAIAnalyticsCards(allMines);
     renderComplianceOpsSummary(allMines);
+    renderDroneSimulation(allMines);
   } catch (err) {
     console.error("Failed to load mines:", err);
   }
@@ -247,6 +249,140 @@ function renderComplianceOpsSummary(mines) {
       </div>
     `;
   }).join('');
+}
+
+function renderDroneSimulation(mines) {
+  const nameEl = document.getElementById('drone-mine-name');
+  const classEl = document.getElementById('drone-classification');
+  const reasonEl = document.getElementById('drone-reason');
+  const badgeEl = document.getElementById('drone-priority-badge');
+  if (!nameEl || !mines.length) return;
+
+  const sorted = [...mines].sort((a, b) => {
+    const scoreA = (a.ai_risk_assessment?.risk_score || 0) + (a.active_violations || 0) * 8;
+    const scoreB = (b.ai_risk_assessment?.risk_score || 0) + (b.active_violations || 0) * 8;
+    return scoreB - scoreA;
+  });
+
+  const mine = sorted[0];
+  const score = mine.ai_risk_assessment?.risk_score || 0;
+  const classification = score >= 70 ? 'Best Target: Critical Recon' : (score >= 40 ? 'Best Target: Preventive Recon' : 'Best Target: Baseline Survey');
+  const confidence = Math.min(98, Math.round(72 + score / 3));
+
+  nameEl.textContent = `${mine.name} (${mine.id})`;
+  classEl.textContent = classification;
+  reasonEl.textContent = `Selected from current mine registry using risk score ${score}, ${mine.active_violations} active violation(s), ${mine.safety_equipment_status || 'functional'} equipment status, and production variance. Scan confidence: ${confidence}%.`;
+  badgeEl.textContent = mine.subsidiary;
+  badgeEl.className = score >= 70 ? 'badge badge-danger' : (score >= 40 ? 'badge badge-warning' : 'badge badge-success');
+}
+
+async function openSensorConsole() {
+  const modal = document.getElementById('sensor-console-modal');
+  const mineSelect = document.getElementById('sensor-console-mine');
+  modal.classList.add('active');
+  modal.setAttribute('aria-hidden', 'false');
+
+  if (!allMines.length) {
+    await loadMinesData();
+  }
+
+  mineSelect.innerHTML = allMines.map(mine => `
+    <option value="${mine.id}">${mine.name} (${mine.subsidiary})</option>
+  `).join('');
+
+  await loadSensorConsoleMine();
+}
+
+function closeSensorConsole() {
+  const modal = document.getElementById('sensor-console-modal');
+  modal.classList.remove('active');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+async function loadSensorConsoleMine() {
+  const mineId = document.getElementById('sensor-console-mine').value;
+  const paramSelect = document.getElementById('sensor-console-parameter');
+  const list = document.getElementById('sensor-console-list');
+  if (!mineId) return;
+
+  list.innerHTML = '<div class="gov-alert gov-alert-info">Loading sensor values...</div>';
+
+  const res = await fetch(`/api/mines/${mineId}/parameters`);
+  sensorConsoleData = await res.json();
+
+  const editableParams = sensorConsoleData.parameters.filter(p => p.parameter !== 'last_inspection_date');
+  paramSelect.innerHTML = editableParams.map(p => `<option value="${p.parameter}">${p.label}</option>`).join('');
+
+  list.innerHTML = sensorConsoleData.parameters.map(p => {
+    const rangeText = getSafeDangerText(p);
+    return `
+      <div class="parameter-card">
+        <div style="display:flex; justify-content:space-between; gap:8px;">
+          <div class="parameter-card-title">${p.label}</div>
+          <span class="badge ${getStatusBadgeClass(p.status)}">${p.status}</span>
+        </div>
+        <div class="parameter-value">${p.value} ${p.unit || ''}</div>
+        <div class="parameter-meta">${rangeText}<br>${p.device}</div>
+      </div>
+    `;
+  }).join('');
+
+  showSensorThresholdHelp();
+}
+
+function getSafeDangerText(p) {
+  if (p.parameter === 'safety_equipment_status') {
+    return 'Safe: functional | Warning: needs_calibration | Danger: faulty';
+  }
+  if (p.warning_threshold === null || p.warning_threshold === undefined) {
+    return 'Safe range: within 25% of mine target | Danger: operational anomaly';
+  }
+  const lowerWorse = ['o2', 'ventilation_air_velocity', 'equipment_uptime'].includes(p.parameter);
+  if (lowerWorse) {
+    return `Safe: above ${p.warning_threshold} ${p.unit} | Warning: ${p.danger_threshold}-${p.warning_threshold} | Danger: below ${p.danger_threshold}`;
+  }
+  return `Safe: below ${p.warning_threshold} ${p.unit} | Warning: ${p.warning_threshold}-${p.danger_threshold} | Danger: above ${p.danger_threshold}`;
+}
+
+function showSensorThresholdHelp() {
+  if (!sensorConsoleData) return;
+  const param = document.getElementById('sensor-console-parameter').value;
+  const help = document.getElementById('sensor-threshold-help');
+  const valueInput = document.getElementById('sensor-console-value');
+  const p = sensorConsoleData.parameters.find(item => item.parameter === param);
+  if (!p) return;
+
+  help.innerHTML = `<strong>${p.label}</strong><br>${getSafeDangerText(p)}<br>Current value: ${p.value} ${p.unit || ''}`;
+  valueInput.value = p.value;
+}
+
+async function submitSensorConsoleValue() {
+  const mineId = document.getElementById('sensor-console-mine').value;
+  const parameter = document.getElementById('sensor-console-parameter').value;
+  const rawValue = document.getElementById('sensor-console-value').value.trim();
+  if (!mineId || !parameter || !rawValue) return;
+
+  const numeric = Number(rawValue);
+  const value = Number.isNaN(numeric) ? rawValue : numeric;
+
+  const res = await fetch('/api/iot/ingest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      mine_id: mineId,
+      parameter,
+      value,
+      timestamp: new Date().toISOString()
+    })
+  });
+
+  if (res.ok) {
+    await loadSensorConsoleMine();
+    await refreshOperationalData();
+    alert('Sensor reading sent and dashboard updated.');
+  } else {
+    alert('Could not send sensor reading. Check whether the value matches the parameter type.');
+  }
 }
 
 // 3. Leaflet GIS Map (Clean Government OpenStreetMap Styling)

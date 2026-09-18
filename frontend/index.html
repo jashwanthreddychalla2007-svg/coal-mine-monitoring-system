@@ -227,6 +227,37 @@
           </ul>
         </div>
       </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Drone Simulation: Priority Mine Recon</div>
+            <div class="panel-subtitle">Prototype scan over the best-priority mine for drone surveillance</div>
+          </div>
+          <span class="badge badge-info" id="drone-priority-badge">Classifying...</span>
+        </div>
+        <div class="panel-body">
+          <div class="drone-sim-layout">
+            <div class="drone-field">
+              <div class="drone-grid"></div>
+              <div class="drone-pit pit-a"></div>
+              <div class="drone-pit pit-b"></div>
+              <div class="drone-path"></div>
+              <div class="drone-unit">DRN-01</div>
+              <div class="drone-hotspot hotspot-a"></div>
+              <div class="drone-hotspot hotspot-b"></div>
+            </div>
+            <div class="drone-readout">
+              <div class="parameter-card-title" id="drone-mine-name">Selecting mine...</div>
+              <div class="parameter-value" id="drone-classification">--</div>
+              <div class="parameter-meta" id="drone-reason">Risk model is selecting the first mine for prototype surveillance.</div>
+              <div class="gov-alert gov-alert-info" style="margin-top:12px; margin-bottom:0;">
+                Simulated output: bench stability, dust plume, perimeter movement, and stockpile scan confidence.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ================= TAB 3: STATUTORY COMPLIANCE ================= -->
@@ -445,6 +476,46 @@
     </div>
   </div>
 
+  <div id="sensor-console-modal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div>
+          <div class="panel-title">Sensor Value Console</div>
+          <div class="panel-subtitle">Select a mine, review safe/danger thresholds, and send a demo IoT reading</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="closeSensorConsole()">Close</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="sensor-console-mine">Mine / Colliery</label>
+            <select id="sensor-console-mine" onchange="loadSensorConsoleMine()"></select>
+          </div>
+          <div class="form-group">
+            <label for="sensor-console-parameter">Sensor Parameter</label>
+            <select id="sensor-console-parameter" onchange="showSensorThresholdHelp()"></select>
+          </div>
+        </div>
+
+        <div id="sensor-threshold-help" class="gov-alert gov-alert-info"></div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="sensor-console-value">New Reading Value</label>
+            <input type="text" id="sensor-console-value" placeholder="Enter value">
+          </div>
+          <div class="form-group" style="display:flex; align-items:flex-end;">
+            <button class="btn btn-primary" style="width:100%;" onclick="submitSensorConsoleValue()">Send Sensor Reading</button>
+          </div>
+        </div>
+
+        <div id="sensor-console-list" class="parameter-grid">
+          <!-- Current sensor threshold cards -->
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Official Footer -->
   <footer class="gov-footer">
     <div class="gov-footer-links">
@@ -452,6 +523,7 @@
       <a href="#statutory" onclick="switchTab('statutory')">Statutory Register</a>
       <a href="#gis" onclick="switchTab('gis')">GIS Spatial Map</a>
       <a href="/docs" target="_blank">API Documentation</a>
+      <button class="footer-action" onclick="openSensorConsole()">Sensor Values</button>
     </div>
     <p>Ministry of Coal &bull; Coal India Limited (CIL) &bull; Directorate General of Mines Safety (DGMS)</p>
     <p style="margin-top: 4px; color: var(--text-light);">Smart India Hackathon 2024 Solution &bull; Developed for Indigenous Mining Compliance Monitoring</p>
