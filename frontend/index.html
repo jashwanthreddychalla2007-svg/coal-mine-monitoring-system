@@ -25,20 +25,6 @@
   <!-- Top Tricolor Stripe -->
   <div class="gov-flag-stripe"></div>
 
-  <!-- Government Identity Topbar -->
-  <div class="gov-topbar">
-    <div class="gov-topbar-left">
-      <span>Government of India</span>
-      <span>|</span>
-      <span>Ministry of Coal</span>
-      <span>|</span>
-      <span>Coal India Limited (CIL)</span>
-    </div>
-    <div>
-      <span>Smart India Hackathon 2024</span>
-    </div>
-  </div>
-
   <!-- Official Header -->
   <header class="gov-header">
     <div class="gov-emblem-section">
@@ -64,6 +50,8 @@
         <span style="font-weight: 600; color: var(--primary-navy);">Portal User:</span>
         <span style="color: var(--text-muted);">DGMS Inspector / CIL HQ</span>
       </div>
+
+      <button class="btn btn-secondary btn-sm" onclick="openSensorConsole()">Sensor Values</button>
     </div>
   </header>
 
@@ -485,19 +473,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Official Footer -->
-  <footer class="gov-footer">
-    <div class="gov-footer-links">
-      <a href="#dashboard" onclick="switchTab('dashboard')">Executive Dashboard</a>
-      <a href="#statutory" onclick="switchTab('statutory')">Statutory Register</a>
-      <a href="#gis" onclick="switchTab('gis')">GIS Spatial Map</a>
-      <a href="/docs" target="_blank">API Documentation</a>
-      <button class="footer-action" onclick="openSensorConsole()">Sensor Values</button>
-    </div>
-    <p>Ministry of Coal &bull; Coal India Limited (CIL) &bull; Directorate General of Mines Safety (DGMS)</p>
-    <p style="margin-top: 4px; color: var(--text-light);">Smart India Hackathon 2024 Solution &bull; Developed for Indigenous Mining Compliance Monitoring</p>
-  </footer>
 
   <script src="/app.js"></script>
 </body>
