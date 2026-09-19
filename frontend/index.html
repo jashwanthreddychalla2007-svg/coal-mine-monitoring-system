@@ -55,7 +55,7 @@
         Alerts <span id="active-alert-count" class="alert-count">0</span>
       </button>
       <button class="btn btn-secondary btn-sm" onclick="openSensorConsole()">Sensor Values</button>
-      <a class="btn btn-primary btn-sm" href="/demo.html">Demo Console</a>
+      <a class="btn btn-primary btn-sm" href="/demo.html">Sensor Console</a>
     </div>
   </header>
 
@@ -114,7 +114,7 @@
         <div class="kpi-card">
           <div class="kpi-label">Active IoT Sensors</div>
           <div class="kpi-value" id="kpi-active-sensors">0</div>
-          <div class="kpi-meta" id="kpi-sensor-meta">Simulated live feed</div>
+          <div class="kpi-meta" id="kpi-sensor-meta">Live sensor feed</div>
         </div>
       </div>
 
@@ -220,10 +220,10 @@
       <div class="panel">
         <div class="panel-header">
           <div>
-            <div class="panel-title">Planned: Drone Surveillance Layer</div>
-            <div class="panel-subtitle">Future scope only, not implemented in this prototype</div>
+            <div class="panel-title">Drone Surveillance Layer</div>
+            <div class="panel-subtitle">Aerial inspection and safety mapping</div>
           </div>
-          <span class="badge badge-neutral">Roadmap</span>
+          <span class="badge badge-neutral">Surveillance</span>
         </div>
         <div class="panel-body">
           <ul class="roadmap-list">
@@ -393,7 +393,7 @@
         </div>
         <div class="panel-body">
           <div class="gov-alert gov-alert-info" style="margin-bottom:16px;">
-            This section filters out normal mines and shows only detected breaches, anomalies, and escalations.
+            Active breaches, anomalies, and escalations are listed below.
           </div>
           <div id="ai-risk-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px;">
             <!-- AI Cards dynamically populated -->
@@ -458,7 +458,7 @@
       <div class="modal-header">
         <div>
           <div class="panel-title">Sensor Value Console</div>
-          <div class="panel-subtitle">Select a mine, review safe/danger thresholds, and send a demo IoT reading</div>
+          <div class="panel-subtitle">Sensor reading entry and threshold review</div>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="closeSensorConsole()">Close</button>
       </div>

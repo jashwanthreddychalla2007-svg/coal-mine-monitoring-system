@@ -56,7 +56,7 @@ function showMobileAlertResult(alert, reading) {
   }
 
   mobileAlertResult.className = "mobile-alert-result active resolved";
-  mobileAlertResult.innerHTML = `<strong>Live value sent.</strong><br>${reading.label} is currently ${reading.status}. The dashboard received the update.`;
+  mobileAlertResult.innerHTML = `<strong>Live value sent.</strong><br>${reading.label} status: ${reading.status}.`;
 }
 
 async function fetchJson(url, options) {
@@ -309,7 +309,7 @@ document.querySelectorAll("[data-preset]").forEach(button => {
 loadMines().catch(error => {
   console.error(error);
   setSync("Error", "critical");
-  parameterCards.innerHTML = `<p class="empty-state">Could not load demo data. Check that the backend is running.</p>`;
+  parameterCards.innerHTML = `<p class="empty-state">Could not load sensor data.</p>`;
 });
 connectLiveUpdates();
 
