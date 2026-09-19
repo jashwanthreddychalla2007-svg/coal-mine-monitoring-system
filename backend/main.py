@@ -92,6 +92,12 @@ def _alert_solution(reading: Dict[str, Any]):
         return "Hold the next blast, review charge pattern, and inspect nearby benches or structures."
     if parameter == "respirable_dust":
         return "Start water spraying or mist cannons, reduce dust-generating movement, and issue respiratory protection."
+    if parameter == "temperature":
+        return "Improve ventilation and hydration breaks, then inspect nearby equipment for heat build-up."
+    if parameter == "pressure":
+        return "Inspect ventilation pressure balance, check stoppings and doors, and verify barometer calibration."
+    if parameter == "light_intensity":
+        return "Restore lighting in the affected zone and stop movement of workers or vehicles until visibility is safe."
     if parameter == "equipment_uptime":
         return "Inspect critical equipment, assign maintenance, and arrange standby machinery if needed."
     if parameter == "safety_equipment_status":
@@ -169,6 +175,12 @@ def _initial_parameter_value(mine: Dict[str, Any], parameter: str):
         return 4.5
     if parameter == "respirable_dust":
         return min(round(gas.get("pm10_ugm3", 120) / 100, 2), 1.65)
+    if parameter == "temperature":
+        return 31.5 if mine.get("type") == "Underground" else 34.0
+    if parameter == "pressure":
+        return 100.8 if mine.get("type") == "Underground" else 101.1
+    if parameter == "light_intensity":
+        return 165 if mine.get("type") == "Underground" else 320
     if parameter == "daily_production":
         return mine.get("current_production_tonnes", 0)
     if parameter == "equipment_uptime":
@@ -211,6 +223,12 @@ def _sync_mine_from_sensor(mine: Dict[str, Any], parameter: str, value):
         gas["co_ppm"] = round(float(value), 1)
     elif parameter == "respirable_dust":
         gas["pm10_ugm3"] = round(float(value) * 100, 1)
+    elif parameter == "temperature":
+        mine["temperature_c"] = round(float(value), 1)
+    elif parameter == "pressure":
+        mine["pressure_kpa"] = round(float(value), 1)
+    elif parameter == "light_intensity":
+        mine["light_lux"] = round(float(value), 1)
     elif parameter == "daily_production":
         mine["current_production_tonnes"] = int(float(value))
     elif parameter == "equipment_uptime":
@@ -343,6 +361,9 @@ def _next_simulated_value(mine: Dict[str, Any], parameter: str):
         "ventilation_air_velocity": 0.05,
         "blast_vibration": 1.0,
         "respirable_dust": 0.12,
+        "temperature": 0.8,
+        "pressure": 0.25,
+        "light_intensity": 12,
         "equipment_uptime": 1.8,
     }.get(parameter, 1)
     value = float(current) + random.uniform(-drift, drift)
@@ -358,6 +379,12 @@ def _next_simulated_value(mine: Dict[str, Any], parameter: str):
         return round(min(8.5, max(1.5, value)), 2)
     if parameter == "respirable_dust":
         return round(min(1.75, max(0.4, value)), 2)
+    if parameter == "temperature":
+        return round(min(37.0, max(26.0, value)), 1)
+    if parameter == "pressure":
+        return round(min(102.5, max(97.0, value)), 1)
+    if parameter == "light_intensity":
+        return round(min(420, max(80, value)), 1)
     if parameter == "equipment_uptime":
         return round(min(98, max(82, value)), 1)
     return round(max(0, value), 2)

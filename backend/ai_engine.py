@@ -70,6 +70,9 @@ class MiningAIRiskEngine:
             "ventilation_air_velocity": "Ventilation air velocity",
             "blast_vibration": "Blast vibration",
             "respirable_dust": "Respirable dust",
+            "temperature": "Ambient temperature",
+            "pressure": "Atmospheric pressure",
+            "light_intensity": "Light intensity",
             "equipment_uptime": "Equipment uptime",
             "safety_equipment_status": "Safety equipment status",
         }

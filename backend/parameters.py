@@ -64,6 +64,38 @@ PARAMETER_DEFINITIONS = {
         "danger_threshold": 3.0,
         "mine_types": ["Underground", "Opencast"],
     },
+    "temperature": {
+        "label": "Ambient temperature",
+        "category": "Environmental / Safety Parameters",
+        "device": "Digital temperature sensor",
+        "placement": "Working faces, substations, and control rooms",
+        "unit": "C",
+        "warning_threshold": 38,
+        "danger_threshold": 45,
+        "mine_types": ["Underground", "Opencast"],
+    },
+    "pressure": {
+        "label": "Atmospheric pressure",
+        "category": "Environmental / Safety Parameters",
+        "device": "Barometric pressure sensor",
+        "placement": "Ventilation monitoring stations",
+        "unit": "kPa",
+        "warning_threshold": 96,
+        "danger_threshold": 94,
+        "lower_is_worse": True,
+        "mine_types": ["Underground", "Opencast"],
+    },
+    "light_intensity": {
+        "label": "Light intensity",
+        "category": "Environmental / Safety Parameters",
+        "device": "Lux sensor",
+        "placement": "Haul roads, working faces, and loading points",
+        "unit": "lux",
+        "warning_threshold": 50,
+        "danger_threshold": 25,
+        "lower_is_worse": True,
+        "mine_types": ["Underground", "Opencast"],
+    },
     "daily_production": {
         "label": "Daily/Monthly production",
         "category": "Operational Parameters",
@@ -101,7 +133,17 @@ PARAMETER_DEFINITIONS = {
     },
 }
 
-ENVIRONMENTAL_KEYS = {"ch4", "co", "o2", "ventilation_air_velocity", "blast_vibration", "respirable_dust"}
+ENVIRONMENTAL_KEYS = {
+    "ch4",
+    "co",
+    "o2",
+    "ventilation_air_velocity",
+    "blast_vibration",
+    "respirable_dust",
+    "temperature",
+    "pressure",
+    "light_intensity",
+}
 SIMULATED_SENSOR_KEYS = [key for key in PARAMETER_DEFINITIONS if key != "last_inspection_date"]
 
 

@@ -22,7 +22,7 @@ const parameterCards = document.getElementById("parameter-cards");
 const mobileAlertResult = document.getElementById("mobile-alert-result");
 
 function isNumericReading(row) {
-  return row && row.parameter !== "last_inspection_date" && row.parameter !== "safety_equipment_status";
+  return row && row.parameter !== "last_inspection_date" && row.parameter !== "safety_equipment_status" && row.parameter !== "daily_production";
 }
 
 function numberValue(value) {
@@ -143,16 +143,10 @@ function renderSelectedParameter() {
     max = Math.max(value * 1.2, warning * 1.4, danger * 1.4);
   }
 
-  if (row.parameter === "daily_production") {
-    const target = currentDetails.mine.daily_target_tonnes || value || 1;
-    min = 0;
-    max = Math.max(target * 1.45, value * 1.2);
-  }
-
   valueInput.value = value;
   valueSlider.min = min.toFixed(2);
   valueSlider.max = max.toFixed(2);
-  valueSlider.step = row.parameter === "daily_production" ? 10 : 0.01;
+  valueSlider.step = 0.01;
   valueSlider.value = value;
   unitLabel.textContent = row.unit || "";
 
@@ -189,7 +183,7 @@ function renderBreachAndSolution() {
 }
 
 function renderParameterCards() {
-  parameterCards.innerHTML = currentDetails.parameters.map(row => `
+  parameterCards.innerHTML = currentDetails.parameters.filter(row => row.parameter !== "daily_production").map(row => `
     <article class="parameter-card">
       <header>
         <h3>${row.label}</h3>
@@ -208,13 +202,6 @@ function presetValue(kind) {
   const danger = numberValue(row.danger_threshold);
   const current = numberValue(row.value);
   const lowerIsWorse = row.warning_threshold !== null && row.danger_threshold !== null && danger < warning;
-
-  if (row.parameter === "daily_production") {
-    const target = currentDetails.mine.daily_target_tonnes || current || 1;
-    if (kind === "safe") return target;
-    if (kind === "warning") return Math.round(target * 1.28);
-    return Math.round(target * 1.45);
-  }
 
   if (row.warning_threshold === null || row.danger_threshold === null) return current;
 
@@ -240,7 +227,7 @@ async function applyCurrentValue() {
     body: JSON.stringify({
       mine_id: currentDetails.mine.id,
       parameter: row.parameter,
-      value: row.parameter === "daily_production" ? Math.round(numberValue(valueInput.value)) : numberValue(valueInput.value),
+      value: numberValue(valueInput.value),
       hold_minutes: 10,
     }),
   });
