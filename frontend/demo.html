@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KhananRakshak Sensor Demo Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/demo.css">
+</head>
+<body>
+  <header class="demo-header">
+    <div>
+      <h1>KhananRakshak Sensor Demo Console</h1>
+      <p>Use this page during judging to change hypothetical sensor values and show the risk engine response in real time.</p>
+    </div>
+    <a class="back-link" href="/">Open Dashboard</a>
+  </header>
+
+  <main class="demo-shell">
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Colliery Project</h2>
+          <p>Select a mine and change one monitored parameter.</p>
+        </div>
+        <span id="sync-badge" class="status-pill">Loading</span>
+      </div>
+
+      <div class="form-grid">
+        <label>
+          Mine
+          <select id="mine-select"></select>
+        </label>
+        <label>
+          Parameter
+          <select id="parameter-select"></select>
+        </label>
+      </div>
+
+      <div id="project-summary" class="project-summary"></div>
+    </section>
+
+    <section class="panel value-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Manual Sensor Value</h2>
+          <p>The simulator will hold your entered value for 10 minutes.</p>
+        </div>
+      </div>
+
+      <div class="value-row">
+        <input id="value-input" type="number" step="0.01">
+        <span id="unit-label"></span>
+        <button id="apply-btn">Apply Value</button>
+      </div>
+
+      <input id="value-slider" type="range" min="0" max="100" step="0.01">
+
+      <div class="preset-row">
+        <button data-preset="safe">Safe</button>
+        <button data-preset="warning">Warning</button>
+        <button data-preset="danger">Danger</button>
+        <button id="clear-btn" class="quiet-btn">Return to Simulator</button>
+      </div>
+
+      <div id="threshold-box" class="threshold-box"></div>
+    </section>
+
+    <section class="risk-grid">
+      <div class="panel risk-card">
+        <span>AI Risk Score</span>
+        <strong id="risk-score">--</strong>
+        <p id="risk-status">Waiting for mine data</p>
+        <div class="meter"><div id="risk-meter"></div></div>
+      </div>
+
+      <div class="panel risk-card">
+        <span>Statistical Hazard Probability</span>
+        <strong id="hazard-probability">--</strong>
+        <p>Computed from the current risk score.</p>
+        <div class="meter"><div id="probability-meter"></div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Live Breach And Solution</h2>
+          <p>This is the same explanation style used in the main dashboard.</p>
+        </div>
+      </div>
+      <div class="breach-grid">
+        <div>
+          <h3>Breach</h3>
+          <ul id="breach-list"></ul>
+        </div>
+        <div>
+          <h3>Solution</h3>
+          <ul id="solution-list"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>All Current Parameters</h2>
+          <p>Values shown here are hypothetical demo readings unless connected to real hardware.</p>
+        </div>
+      </div>
+      <div id="parameter-cards" class="parameter-cards"></div>
+    </section>
+  </main>
+
+  <script src="/demo.js"></script>
+</body>
+</html>

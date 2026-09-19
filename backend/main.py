@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio
 import os
 import random
@@ -39,6 +39,7 @@ compliances_db = list(STATUTORY_COMPLIANCES)
 inspections_db = list(INSPECTION_REPORTS)
 contractors_db = list(CONTRACTORS)
 iot_readings_db: Dict[str, Dict[str, Dict[str, Any]]] = {}
+manual_sensor_overrides_db: Dict[str, datetime] = {}
 simulator_task = None
 last_sensor_sync = datetime.now()
 
@@ -47,6 +48,10 @@ SAFETY_STATUSES = ["functional", "functional", "functional", "functional"]
 
 def _mine_by_id(mine_id: str):
     return next((m for m in mines_db if m["id"] == mine_id), None)
+
+
+def _override_key(mine_id: str, parameter: str):
+    return f"{mine_id}:{parameter}"
 
 
 def _initial_parameter_value(mine: Dict[str, Any], parameter: str):
@@ -207,6 +212,11 @@ class SensorReading(BaseModel):
     parameter: str
     value: Any
     timestamp: Optional[str] = None
+    hold_minutes: Optional[int] = 10
+
+class SensorOverrideClear(BaseModel):
+    mine_id: Optional[str] = None
+    parameter: Optional[str] = None
 
 
 def _next_simulated_value(mine: Dict[str, Any], parameter: str):
@@ -257,6 +267,11 @@ async def iot_simulator_loop():
                     if p in SIMULATED_SENSOR_KEYS
                 ]
                 for parameter in keys:
+                    expiry = manual_sensor_overrides_db.get(_override_key(mine["id"], parameter))
+                    if expiry and expiry > datetime.now():
+                        continue
+                    if expiry and expiry <= datetime.now():
+                        manual_sensor_overrides_db.pop(_override_key(mine["id"], parameter), None)
                     value = _next_simulated_value(mine, parameter)
                     ingest_sensor_reading(mine["id"], parameter, value)
         except Exception as exc:
@@ -323,14 +338,15 @@ def list_mines(subsidiary: Optional[str] = None, risk_filter: Optional[str] = No
     """List mines with computed real-time AI risk evaluation"""
     results = []
     for mine in mines_db:
+        params = get_mine_parameter_snapshot(mine)
+        mine_for_ai = {**mine, "iot_parameters": params}
         if subsidiary and mine.get("subsidiary") != subsidiary:
             continue
         if risk_filter and mine.get("risk_level") != risk_filter:
             continue
             
-        ai_assessment = MiningAIRiskEngine.calculate_mine_risk_score(mine, compliances_db, inspections_db)
-        anomaly = MiningAIRiskEngine.detect_production_compliance_anomaly(mine)
-        params = get_mine_parameter_snapshot(mine)
+        ai_assessment = MiningAIRiskEngine.calculate_mine_risk_score(mine_for_ai, compliances_db, inspections_db)
+        anomaly = MiningAIRiskEngine.detect_production_compliance_anomaly(mine_for_ai)
         uptime = next((p for p in params if p["parameter"] == "equipment_uptime"), None)
         safety_status = next((p for p in params if p["parameter"] == "safety_equipment_status"), None)
         
@@ -355,15 +371,17 @@ def get_mine_details(mine_id: str):
     mine_inspections = [i for i in inspections_db if i.get("mine_id") == mine_id]
     mine_contractors = [c for c in contractors_db if c.get("mine_id") == mine_id]
     
-    ai_risk = MiningAIRiskEngine.calculate_mine_risk_score(mine, compliances_db, inspections_db)
-    anomaly = MiningAIRiskEngine.detect_production_compliance_anomaly(mine)
+    params = get_mine_parameter_snapshot(mine)
+    mine_for_ai = {**mine, "iot_parameters": params}
+    ai_risk = MiningAIRiskEngine.calculate_mine_risk_score(mine_for_ai, compliances_db, inspections_db)
+    anomaly = MiningAIRiskEngine.detect_production_compliance_anomaly(mine_for_ai)
 
     return {
         "mine": mine,
         "compliances": mine_compliances,
         "inspections": mine_inspections,
         "contractors": mine_contractors,
-        "parameters": get_mine_parameter_snapshot(mine),
+        "parameters": params,
         "ai_risk_report": ai_risk,
         "production_anomaly": anomaly
     }
@@ -373,7 +391,20 @@ def get_mine_details(mine_id: str):
 def ingest_iot_reading(payload: SensorReading):
     """Accept a real or simulated IoT sensor reading."""
     reading = ingest_sensor_reading(payload.mine_id, payload.parameter, payload.value, payload.timestamp)
+    minutes = max(1, min(payload.hold_minutes or 10, 60))
+    manual_sensor_overrides_db[_override_key(payload.mine_id, payload.parameter)] = datetime.now() + timedelta(minutes=minutes)
     return {"message": "IoT reading logged", "reading": reading}
+
+@app.post("/api/iot/overrides/clear")
+def clear_sensor_override(payload: SensorOverrideClear):
+    removed = 0
+    for key in list(manual_sensor_overrides_db.keys()):
+        mine_match = payload.mine_id is None or key.startswith(f"{payload.mine_id}:")
+        parameter_match = payload.parameter is None or key.endswith(f":{payload.parameter}")
+        if mine_match and parameter_match:
+            manual_sensor_overrides_db.pop(key, None)
+            removed += 1
+    return {"message": "Manual sensor hold cleared", "removed": removed}
 
 @app.get("/mines/{mine_id}/parameters")
 @app.get("/api/mines/{mine_id}/parameters")

@@ -61,6 +61,36 @@ class MiningAIRiskEngine:
                 explanations.append(f"Moderate Dust Alert: PM10 is {pm10} ug/m3.")
                 recommendations.append("Increase water bowser spraying rounds on haul road.")
 
+        # Parameter panel readings used for demo-time what-if changes
+        parameter_rows = mine_data.get("iot_parameters", [])
+        watched_parameters = {
+            "ch4": "Methane",
+            "co": "Carbon monoxide",
+            "o2": "Oxygen",
+            "ventilation_air_velocity": "Ventilation air velocity",
+            "blast_vibration": "Blast vibration",
+            "respirable_dust": "Respirable dust",
+            "equipment_uptime": "Equipment uptime",
+            "safety_equipment_status": "Safety equipment status",
+        }
+        for row in parameter_rows:
+            key = row.get("parameter")
+            status_value = row.get("status")
+            if key not in watched_parameters or status_value == "normal":
+                continue
+
+            label = watched_parameters[key]
+            value = row.get("value")
+            unit = row.get("unit") or ""
+            if status_value == "critical":
+                score += 14 if key in ["equipment_uptime", "safety_equipment_status"] else 18
+                explanations.append(f"CRITICAL: {label} reading is {value} {unit}.")
+                recommendations.append(f"Take immediate corrective action for {label.lower()} and recheck the sensor reading.")
+            elif status_value == "warning":
+                score += 7 if key in ["equipment_uptime", "safety_equipment_status"] else 9
+                explanations.append(f"WARNING: {label} reading is {value} {unit}.")
+                recommendations.append(f"Monitor {label.lower()} closely and schedule correction before it becomes critical.")
+
         # 2. Overdue Statutory Compliances (Max 25 pts)
         mine_compliances = [c for c in compliances if c.get("mine_id") == mine_data.get("id")]
         overdue_critical = [c for c in mine_compliances if c.get("status") == "OVERDUE" and "Class A" in c.get("criticality", "")]
