@@ -1,10 +1,12 @@
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import asyncio
+import json
 import os
 import random
 import uuid
@@ -42,6 +44,13 @@ iot_readings_db: Dict[str, Dict[str, Dict[str, Any]]] = {}
 manual_sensor_overrides_db: Dict[str, datetime] = {}
 simulator_task = None
 last_sensor_sync = datetime.now()
+live_update_version = 0
+last_sensor_event: Dict[str, Any] = {
+    "version": 0,
+    "mine_id": None,
+    "parameter": None,
+    "timestamp": last_sensor_sync.isoformat(),
+}
 
 SAFETY_STATUSES = ["functional", "functional", "functional", "functional"]
 
@@ -52,6 +61,17 @@ def _mine_by_id(mine_id: str):
 
 def _override_key(mine_id: str, parameter: str):
     return f"{mine_id}:{parameter}"
+
+
+def _publish_sensor_update(mine_id: Optional[str] = None, parameter: Optional[str] = None):
+    global live_update_version, last_sensor_event
+    live_update_version += 1
+    last_sensor_event = {
+        "version": live_update_version,
+        "mine_id": mine_id,
+        "parameter": parameter,
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 def _initial_parameter_value(mine: Dict[str, Any], parameter: str):
@@ -166,6 +186,7 @@ def ingest_sensor_reading(mine_id: str, parameter: str, value, timestamp: Option
 
     if parameter in ENVIRONMENTAL_KEYS and reading["status"] == "critical":
         _create_iot_escalation(mine, reading)
+    _publish_sensor_update(mine_id, parameter)
     return reading
 
 
@@ -404,7 +425,20 @@ def clear_sensor_override(payload: SensorOverrideClear):
         if mine_match and parameter_match:
             manual_sensor_overrides_db.pop(key, None)
             removed += 1
+    _publish_sensor_update(payload.mine_id, payload.parameter)
     return {"message": "Manual sensor hold cleared", "removed": removed}
+
+@app.get("/api/iot/events")
+async def sensor_event_stream():
+    async def event_generator():
+        seen_version = -1
+        while True:
+            if last_sensor_event["version"] != seen_version:
+                seen_version = last_sensor_event["version"]
+                yield f"data: {json.dumps(last_sensor_event)}\n\n"
+            await asyncio.sleep(0.2)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.get("/mines/{mine_id}/parameters")
 @app.get("/api/mines/{mine_id}/parameters")

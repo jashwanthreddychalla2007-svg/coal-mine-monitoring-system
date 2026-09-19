@@ -1,6 +1,7 @@
 let mines = [];
 let currentDetails = null;
 let refreshTimer = null;
+let liveTimer = null;
 
 const mineSelect = document.getElementById("mine-select");
 const parameterSelect = document.getElementById("parameter-select");
@@ -243,6 +244,28 @@ async function clearCurrentOverride() {
   await loadMineDetails(currentDetails.mine.id);
 }
 
+function connectLiveUpdates() {
+  if (!window.EventSource) return;
+  const source = new EventSource("/api/iot/events");
+  source.onmessage = event => {
+    try {
+      const data = JSON.parse(event.data);
+      if (!currentDetails || data.version <= 0) return;
+      if (!data.mine_id || data.mine_id === currentDetails.mine.id) {
+        clearTimeout(liveTimer);
+        liveTimer = setTimeout(() => {
+          loadMineDetails(currentDetails.mine.id).catch(error => {
+            console.error(error);
+            setSync("Offline", "critical");
+          });
+        }, 80);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+}
+
 mineSelect.addEventListener("change", () => loadMineDetails(mineSelect.value));
 parameterSelect.addEventListener("change", renderSelectedParameter);
 valueInput.addEventListener("input", () => {
@@ -268,6 +291,7 @@ loadMines().catch(error => {
   setSync("Error", "critical");
   parameterCards.innerHTML = `<p class="empty-state">Could not load demo data. Check that the backend is running.</p>`;
 });
+connectLiveUpdates();
 
 refreshTimer = setInterval(() => {
   if (currentDetails) {

@@ -6,6 +6,8 @@ let gisMap = null;
 let mapMarkers = [];
 let chartInstance = null;
 let sensorConsoleData = null;
+let openParameterMineId = null;
+let liveRefreshTimer = null;
 
 const sectionTitles = {
   'dashboard': 'Executive Overview',
@@ -18,6 +20,7 @@ const sectionTitles = {
 
 document.addEventListener("DOMContentLoaded", () => {
   initDashboard();
+  connectLiveSensorUpdates();
   setInterval(refreshOperationalData, 30000);
 });
 
@@ -33,6 +36,34 @@ async function refreshOperationalData() {
   await loadOverview();
   await loadMinesData();
   await loadInspectionsData();
+}
+
+function scheduleLiveRefresh(eventData = {}) {
+  clearTimeout(liveRefreshTimer);
+  liveRefreshTimer = setTimeout(async () => {
+    await refreshOperationalData();
+    if (openParameterMineId && (!eventData.mine_id || eventData.mine_id === openParameterMineId)) {
+      await openParameterModal(openParameterMineId, true);
+    }
+  }, 80);
+}
+
+function connectLiveSensorUpdates() {
+  if (!window.EventSource) return;
+  const source = new EventSource('/api/iot/events');
+  source.onmessage = event => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.version > 0) {
+        scheduleLiveRefresh(data);
+      }
+    } catch (err) {
+      console.error('Live sensor update parse failed:', err);
+    }
+  };
+  source.onerror = () => {
+    console.warn('Live sensor stream reconnecting...');
+  };
 }
 
 function getStatusBadgeClass(status) {
@@ -192,13 +223,16 @@ async function loadMinesData() {
   }
 }
 
-async function openParameterModal(mineId) {
+async function openParameterModal(mineId, keepOpen = false) {
   const modal = document.getElementById('parameter-modal');
   const content = document.getElementById('parameter-modal-content');
   const title = document.getElementById('parameter-modal-title');
   const subtitle = document.getElementById('parameter-modal-subtitle');
 
-  content.innerHTML = '<div class="gov-alert gov-alert-info">Loading current sensor readings...</div>';
+  openParameterMineId = mineId;
+  if (!keepOpen) {
+    content.innerHTML = '<div class="gov-alert gov-alert-info">Loading current sensor readings...</div>';
+  }
   modal.classList.add('active');
   modal.setAttribute('aria-hidden', 'false');
 
@@ -270,6 +304,7 @@ function closeParameterModal() {
   const modal = document.getElementById('parameter-modal');
   modal.classList.remove('active');
   modal.setAttribute('aria-hidden', 'true');
+  openParameterMineId = null;
 }
 
 function renderComplianceOpsSummary(mines) {
@@ -391,8 +426,7 @@ async function submitSensorConsoleValue() {
 
   if (res.ok) {
     await loadSensorConsoleMine();
-    await refreshOperationalData();
-    alert('Sensor reading sent and dashboard updated.');
+    scheduleLiveRefresh({ mine_id: mineId, parameter });
   } else {
     alert('Could not send sensor reading. Check whether the value matches the parameter type.');
   }
