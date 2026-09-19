@@ -19,6 +19,7 @@ const probabilityMeter = document.getElementById("probability-meter");
 const breachList = document.getElementById("breach-list");
 const solutionList = document.getElementById("solution-list");
 const parameterCards = document.getElementById("parameter-cards");
+const mobileAlertResult = document.getElementById("mobile-alert-result");
 
 function isNumericReading(row) {
   return row && row.parameter !== "last_inspection_date" && row.parameter !== "safety_equipment_status";
@@ -38,6 +39,24 @@ function statusClass(status) {
 function setSync(text, status) {
   syncBadge.textContent = text;
   syncBadge.className = `status-pill ${status ? statusClass(status) : ""}`;
+}
+
+function alertClass(severity) {
+  if (severity === "DANGER") return "danger";
+  if (severity === "WARNING") return "warning";
+  return "resolved";
+}
+
+function showMobileAlertResult(alert, reading) {
+  if (!mobileAlertResult) return;
+  if (alert) {
+    mobileAlertResult.className = `mobile-alert-result active ${alertClass(alert.severity)}`;
+    mobileAlertResult.innerHTML = `<strong>${alert.severity} alert sent to dashboard.</strong><br>${alert.message}<br><strong>Action:</strong> ${alert.solution}`;
+    return;
+  }
+
+  mobileAlertResult.className = "mobile-alert-result active resolved";
+  mobileAlertResult.innerHTML = `<strong>Live value sent.</strong><br>${reading.label} is currently ${reading.status}. The dashboard received the update.`;
 }
 
 async function fetchJson(url, options) {
@@ -215,7 +234,7 @@ async function applyCurrentValue() {
   if (!row) return;
 
   setSync("Applying", "warning");
-  await fetchJson("/api/iot/ingest", {
+  const response = await fetchJson("/api/iot/ingest", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -225,6 +244,7 @@ async function applyCurrentValue() {
       hold_minutes: 10,
     }),
   });
+  showMobileAlertResult(response.alert, response.reading);
   await loadMineDetails(currentDetails.mine.id);
 }
 

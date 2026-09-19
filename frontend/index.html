@@ -51,6 +51,9 @@
         <span style="color: var(--text-muted);">DGMS Inspector / CIL HQ</span>
       </div>
 
+      <button class="btn btn-secondary btn-sm alert-button" onclick="scrollToSensorAlerts()">
+        Alerts <span id="active-alert-count" class="alert-count">0</span>
+      </button>
       <button class="btn btn-secondary btn-sm" onclick="openSensorConsole()">Sensor Values</button>
       <a class="btn btn-primary btn-sm" href="/demo.html">Demo Console</a>
     </div>
@@ -112,6 +115,21 @@
           <div class="kpi-label">Active IoT Sensors</div>
           <div class="kpi-value" id="kpi-active-sensors">0</div>
           <div class="kpi-meta" id="kpi-sensor-meta">Simulated live feed</div>
+        </div>
+      </div>
+
+      <div class="panel" id="sensor-alert-panel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Active Sensor Alerts</div>
+            <div class="panel-subtitle">Warning and danger alerts generated from live sensor threshold changes</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="loadAlertsData(false)">Refresh Alerts</button>
+        </div>
+        <div class="panel-body">
+          <div id="sensor-alerts-list" class="sensor-alert-list">
+            <div class="gov-alert gov-alert-info">No active sensor alerts.</div>
+          </div>
         </div>
       </div>
 
@@ -474,6 +492,8 @@
       </div>
     </div>
   </div>
+
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <script src="/app.js"></script>
 </body>

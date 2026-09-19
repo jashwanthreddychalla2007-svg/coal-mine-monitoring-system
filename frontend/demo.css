@@ -249,6 +249,39 @@ button:hover,
   line-height: 1.55;
 }
 
+.mobile-alert-result {
+  display: none;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  background: #ffffff;
+}
+
+.mobile-alert-result.active {
+  display: block;
+}
+
+.mobile-alert-result.warning {
+  border-left-color: var(--amber);
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.mobile-alert-result.danger {
+  border-left-color: var(--red);
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.mobile-alert-result.resolved {
+  border-left-color: var(--green);
+  background: #ecfdf5;
+  color: #065f46;
+}
+
 .risk-card strong {
   display: block;
   font-size: 36px;

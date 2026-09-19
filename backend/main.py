@@ -42,6 +42,8 @@ inspections_db = list(INSPECTION_REPORTS)
 contractors_db = list(CONTRACTORS)
 iot_readings_db: Dict[str, Dict[str, Dict[str, Any]]] = {}
 manual_sensor_overrides_db: Dict[str, datetime] = {}
+sensor_alerts_db: List[Dict[str, Any]] = []
+sensor_status_db: Dict[str, str] = {}
 simulator_task = None
 last_sensor_sync = datetime.now()
 live_update_version = 0
@@ -49,6 +51,7 @@ last_sensor_event: Dict[str, Any] = {
     "version": 0,
     "mine_id": None,
     "parameter": None,
+    "alert": None,
     "timestamp": last_sensor_sync.isoformat(),
 }
 
@@ -63,15 +66,93 @@ def _override_key(mine_id: str, parameter: str):
     return f"{mine_id}:{parameter}"
 
 
-def _publish_sensor_update(mine_id: Optional[str] = None, parameter: Optional[str] = None):
+def _publish_sensor_update(mine_id: Optional[str] = None, parameter: Optional[str] = None, alert: Optional[Dict[str, Any]] = None):
     global live_update_version, last_sensor_event
     live_update_version += 1
     last_sensor_event = {
         "version": live_update_version,
         "mine_id": mine_id,
         "parameter": parameter,
+        "alert": alert,
         "timestamp": datetime.now().isoformat(),
     }
+
+
+def _alert_solution(reading: Dict[str, Any]):
+    parameter = reading["parameter"]
+    if parameter == "ch4":
+        return "Stop electrical equipment in the affected section, improve ventilation, and evacuate workers if the value keeps rising."
+    if parameter == "co":
+        return "Check for spontaneous heating or fire, increase ventilation, and inspect the goaf/blasting zone immediately."
+    if parameter == "o2":
+        return "Move workers away from the affected area and restore fresh air supply before work continues."
+    if parameter == "ventilation_air_velocity":
+        return "Increase auxiliary ventilation and inspect ducts, stoppings, and fan output."
+    if parameter == "blast_vibration":
+        return "Hold the next blast, review charge pattern, and inspect nearby benches or structures."
+    if parameter == "respirable_dust":
+        return "Start water spraying or mist cannons, reduce dust-generating movement, and issue respiratory protection."
+    if parameter == "equipment_uptime":
+        return "Inspect critical equipment, assign maintenance, and arrange standby machinery if needed."
+    if parameter == "safety_equipment_status":
+        return "Replace or recalibrate faulty safety equipment before the next shift."
+    if parameter == "daily_production":
+        return "Verify production entry against dispatch records and approved operating limit."
+    return "Verify the sensor reading, inspect the location, and take corrective action."
+
+
+def _reading_threshold_text(reading: Dict[str, Any]):
+    warning = reading.get("warning_threshold")
+    danger = reading.get("danger_threshold")
+    unit = reading.get("unit") or ""
+    if warning is None or danger is None:
+        return "threshold monitored by operating rule"
+    return f"warning {warning} {unit}, danger {danger} {unit}".strip()
+
+
+def _record_sensor_alert(mine: Dict[str, Any], reading: Dict[str, Any]):
+    key = _override_key(mine["id"], reading["parameter"])
+    previous_status = sensor_status_db.get(key)
+    current_status = reading["status"]
+    sensor_status_db[key] = current_status
+
+    if previous_status is None or previous_status == current_status:
+        return None
+    if current_status == "normal" and previous_status not in ["warning", "critical"]:
+        return None
+    if current_status not in ["warning", "critical", "normal"]:
+        return None
+
+    severity = "RESOLVED"
+    title = "Sensor returned to safe range"
+    if current_status == "warning":
+        severity = "WARNING"
+        title = "Sensor crossed warning limit"
+    elif current_status == "critical":
+        severity = "DANGER"
+        title = "Sensor crossed danger limit"
+
+    alert = {
+        "id": f"ALERT-{uuid.uuid4().hex[:7].upper()}",
+        "mine_id": mine["id"],
+        "mine_name": mine["name"],
+        "parameter": reading["parameter"],
+        "label": reading["label"],
+        "severity": severity,
+        "status": current_status,
+        "previous_status": previous_status,
+        "value": reading["value"],
+        "unit": reading.get("unit") or "",
+        "threshold": _reading_threshold_text(reading),
+        "title": title,
+        "message": f"{reading['label']} at {mine['name']} changed from {previous_status} to {current_status}. Current value: {reading['value']} {reading.get('unit') or ''}.",
+        "solution": "Reading is back in safe range. Continue monitoring and keep the last corrective action note in the shift log." if severity == "RESOLVED" else _alert_solution(reading),
+        "timestamp": datetime.now().isoformat(),
+        "acknowledged": severity == "RESOLVED",
+    }
+    sensor_alerts_db.insert(0, alert)
+    del sensor_alerts_db[80:]
+    return alert
 
 
 def _initial_parameter_value(mine: Dict[str, Any], parameter: str):
@@ -183,10 +264,11 @@ def ingest_sensor_reading(mine_id: str, parameter: str, value, timestamp: Option
     iot_readings_db.setdefault(mine_id, {})[parameter] = reading
     _sync_mine_from_sensor(mine, parameter, value)
     last_sensor_sync = datetime.now()
+    alert = _record_sensor_alert(mine, reading)
 
     if parameter in ENVIRONMENTAL_KEYS and reading["status"] == "critical":
         _create_iot_escalation(mine, reading)
-    _publish_sensor_update(mine_id, parameter)
+    _publish_sensor_update(mine_id, parameter, alert)
     return reading
 
 
@@ -238,6 +320,9 @@ class SensorReading(BaseModel):
 class SensorOverrideClear(BaseModel):
     mine_id: Optional[str] = None
     parameter: Optional[str] = None
+
+class AlertAcknowledge(BaseModel):
+    acknowledged: Optional[bool] = True
 
 
 def _next_simulated_value(mine: Dict[str, Any], parameter: str):
@@ -411,10 +496,12 @@ def get_mine_details(mine_id: str):
 @app.post("/api/iot/ingest")
 def ingest_iot_reading(payload: SensorReading):
     """Accept a real or simulated IoT sensor reading."""
+    before_alert_count = len(sensor_alerts_db)
     reading = ingest_sensor_reading(payload.mine_id, payload.parameter, payload.value, payload.timestamp)
     minutes = max(1, min(payload.hold_minutes or 10, 60))
     manual_sensor_overrides_db[_override_key(payload.mine_id, payload.parameter)] = datetime.now() + timedelta(minutes=minutes)
-    return {"message": "IoT reading logged", "reading": reading}
+    alert = sensor_alerts_db[0] if len(sensor_alerts_db) > before_alert_count else None
+    return {"message": "IoT reading logged", "reading": reading, "alert": alert}
 
 @app.post("/api/iot/overrides/clear")
 def clear_sensor_override(payload: SensorOverrideClear):
@@ -427,6 +514,24 @@ def clear_sensor_override(payload: SensorOverrideClear):
             removed += 1
     _publish_sensor_update(payload.mine_id, payload.parameter)
     return {"message": "Manual sensor hold cleared", "removed": removed}
+
+@app.get("/api/alerts")
+def get_sensor_alerts(include_acknowledged: bool = False):
+    if include_acknowledged:
+        return sensor_alerts_db
+    return [
+        alert for alert in sensor_alerts_db
+        if not alert.get("acknowledged") and alert.get("severity") in ["WARNING", "DANGER"]
+    ]
+
+@app.post("/api/alerts/{alert_id}/acknowledge")
+def acknowledge_sensor_alert(alert_id: str, payload: AlertAcknowledge = Body(default=AlertAcknowledge())):
+    alert = next((item for item in sensor_alerts_db if item["id"] == alert_id), None)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    alert["acknowledged"] = bool(payload.acknowledged)
+    _publish_sensor_update(alert["mine_id"], alert["parameter"], alert)
+    return {"message": "Alert updated", "alert": alert}
 
 @app.get("/api/iot/events")
 async def sensor_event_stream():

@@ -8,6 +8,8 @@ let chartInstance = null;
 let sensorConsoleData = null;
 let openParameterMineId = null;
 let liveRefreshTimer = null;
+let activeAlerts = [];
+let knownAlertIds = new Set();
 
 const sectionTitles = {
   'dashboard': 'Executive Overview',
@@ -18,8 +20,8 @@ const sectionTitles = {
   'contractors': 'Contractor Compliance'
 };
 
-document.addEventListener("DOMContentLoaded", () => {
-  initDashboard();
+document.addEventListener("DOMContentLoaded", async () => {
+  await initDashboard();
   connectLiveSensorUpdates();
   setInterval(refreshOperationalData, 30000);
 });
@@ -27,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
 async function initDashboard() {
   await loadOverview();
   await loadMinesData();
+  await loadAlertsData(true);
   await loadCompliancesData();
   await loadInspectionsData();
   await loadContractorsData();
@@ -35,12 +38,16 @@ async function initDashboard() {
 async function refreshOperationalData() {
   await loadOverview();
   await loadMinesData();
+  await loadAlertsData(false);
   await loadInspectionsData();
 }
 
 function scheduleLiveRefresh(eventData = {}) {
   clearTimeout(liveRefreshTimer);
   liveRefreshTimer = setTimeout(async () => {
+    if (eventData.alert) {
+      showSensorToast(eventData.alert);
+    }
     await refreshOperationalData();
     if (openParameterMineId && (!eventData.mine_id || eventData.mine_id === openParameterMineId)) {
       await openParameterModal(openParameterMineId, true);
@@ -64,6 +71,102 @@ function connectLiveSensorUpdates() {
   source.onerror = () => {
     console.warn('Live sensor stream reconnecting...');
   };
+}
+
+function alertBadgeClass(severity) {
+  if (severity === 'DANGER') return 'badge-danger';
+  if (severity === 'WARNING') return 'badge-warning';
+  return 'badge-success';
+}
+
+function alertClass(severity) {
+  if (severity === 'DANGER') return 'danger';
+  if (severity === 'WARNING') return 'warning';
+  return 'resolved';
+}
+
+function formatAlertTime(timestamp) {
+  if (!timestamp) return '--';
+  return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+async function loadAlertsData(initialLoad = false) {
+  try {
+    const res = await fetch('/api/alerts');
+    activeAlerts = await res.json();
+
+    const count = document.getElementById('active-alert-count');
+    if (count) count.textContent = activeAlerts.length;
+
+    renderSensorAlerts();
+    if (initialLoad) {
+      activeAlerts.forEach(alert => knownAlertIds.add(alert.id));
+    }
+  } catch (err) {
+    console.error('Failed to load sensor alerts:', err);
+  }
+}
+
+function renderSensorAlerts() {
+  const container = document.getElementById('sensor-alerts-list');
+  if (!container) return;
+
+  if (!activeAlerts.length) {
+    container.innerHTML = '<div class="gov-alert gov-alert-info">No active sensor alerts. All monitored sensor values are currently within safe limits.</div>';
+    return;
+  }
+
+  container.innerHTML = activeAlerts.map(alert => `
+    <div class="sensor-alert-card ${alertClass(alert.severity)}">
+      <div>
+        <div class="sensor-alert-title">
+          <span class="badge ${alertBadgeClass(alert.severity)}">${alert.severity}</span>
+          ${alert.mine_name} - ${alert.label}
+        </div>
+        <div class="sensor-alert-meta">
+          Value: <strong>${alert.value} ${alert.unit || ''}</strong> | Limit: ${alert.threshold} | Time: ${formatAlertTime(alert.timestamp)}
+        </div>
+        <div class="sensor-alert-solution"><strong>Action:</strong> ${alert.solution}</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="acknowledgeAlert('${alert.id}')">Acknowledge</button>
+    </div>
+  `).join('');
+}
+
+function showSensorToast(alert) {
+  if (!alert || !alert.id || knownAlertIds.has(alert.id)) return;
+  knownAlertIds.add(alert.id);
+
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `sensor-toast ${alertClass(alert.severity)}`;
+  toast.innerHTML = `
+    <strong>${alert.severity}: ${alert.mine_name}</strong>
+    <p>${alert.label} is ${alert.value} ${alert.unit || ''}. ${alert.solution}</p>
+  `;
+  container.prepend(toast);
+  setTimeout(() => toast.remove(), alert.severity === 'DANGER' ? 9000 : 6500);
+}
+
+async function acknowledgeAlert(alertId) {
+  try {
+    await fetch(`/api/alerts/${alertId}/acknowledge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acknowledged: true })
+    });
+    await loadAlertsData(false);
+  } catch (err) {
+    alert('Could not acknowledge alert.');
+  }
+}
+
+function scrollToSensorAlerts() {
+  switchTab('dashboard');
+  const panel = document.getElementById('sensor-alert-panel');
+  if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function getStatusBadgeClass(status) {

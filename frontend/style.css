@@ -109,6 +109,24 @@ body {
   gap: 14px;
 }
 
+.alert-button {
+  gap: 6px;
+}
+
+.alert-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+}
+
 /* Main Navigation Strip */
 .gov-nav {
   background-color: var(--primary-navy);
@@ -525,6 +543,106 @@ tbody tr:hover {
   .breach-solution-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.sensor-alert-list {
+  display: grid;
+  gap: 10px;
+}
+
+.sensor-alert-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  border: 1px solid var(--border-color);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: #ffffff;
+}
+
+.sensor-alert-card.warning {
+  border-left-color: #d97706;
+  background: #fffbeb;
+}
+
+.sensor-alert-card.danger {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+}
+
+.sensor-alert-card.resolved {
+  border-left-color: var(--gov-green);
+  background: #ecfdf5;
+}
+
+.sensor-alert-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-weight: 700;
+  color: var(--primary-navy);
+}
+
+.sensor-alert-meta,
+.sensor-alert-solution {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sensor-alert-solution {
+  margin-top: 6px;
+  color: var(--text-main);
+}
+
+.toast-container {
+  position: fixed;
+  right: 22px;
+  top: 92px;
+  z-index: 3000;
+  width: min(380px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+}
+
+.sensor-toast {
+  border: 1px solid var(--border-color);
+  border-left: 5px solid #d97706;
+  border-radius: var(--radius);
+  background: #ffffff;
+  box-shadow: var(--shadow-md);
+  padding: 12px 14px;
+  animation: toastIn 160ms ease-out;
+}
+
+.sensor-toast.danger {
+  border-left-color: #dc2626;
+}
+
+.sensor-toast.resolved {
+  border-left-color: var(--gov-green);
+}
+
+.sensor-toast strong {
+  display: block;
+  color: var(--primary-navy);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.sensor-toast p {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Forms & Buttons */
